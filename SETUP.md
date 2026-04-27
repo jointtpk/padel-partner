@@ -79,7 +79,8 @@ buildscript {
 apply plugin: 'com.google.gms.google-services'
 ```
 
----
+---gh auth logingit config --global user.name "Your Name"
+git config --global user.email "you@example.com"
 
 ## Screens built so far
 - [x] Sign Up (4-step: info → OTP → profile → smart tags)
