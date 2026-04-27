@@ -39,32 +39,37 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final store = AppController.to;
-    // If a player was passed as argument, show their profile; else show own
-    final player = (Get.arguments as Player?) ?? kMe;
-    final isOwnProfile = player.id == kMe.id;
+    final passedPlayer = Get.arguments as Player?;
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
-          _ProfileHeaderSliver(player: player, isOwn: isOwnProfile, store: store),
-        ],
-        body: Column(
-          children: [
-            _TabBar(tab: _tab),
-            Expanded(
-              child: TabBarView(
-                controller: _tab,
-                children: [
-                  _StatsTab(player: player),
-                  _HistoryTab(player: player, store: store),
-                  _PartnersTab(player: player, store: store),
-                ],
-              ),
-            ),
+      body: Obx(() {
+        // If a player was passed as argument, show their profile;
+        // else show the current logged-in user (reactive).
+        final player = passedPlayer ?? store.currentUser.value;
+        final isOwnProfile = player.id == store.currentUser.value.id;
+
+        return NestedScrollView(
+          headerSliverBuilder: (_, __) => [
+            _ProfileHeaderSliver(player: player, isOwn: isOwnProfile, store: store),
           ],
-        ),
-      ),
+          body: Column(
+            children: [
+              _TabBar(tab: _tab),
+              Expanded(
+                child: TabBarView(
+                  controller: _tab,
+                  children: [
+                    _StatsTab(player: player),
+                    _HistoryTab(player: player, store: store),
+                    _PartnersTab(player: player, store: store),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }
@@ -109,7 +114,19 @@ class _ProfileHeaderSliver extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (isOwn)
+                if (isOwn) ...[
+                  GestureDetector(
+                    onTap: () => Get.toNamed(Routes.editProfile),
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.10),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.edit_outlined, color: Colors.white, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => Get.toNamed(Routes.subscription),
                     child: Container(
@@ -127,8 +144,8 @@ class _ProfileHeaderSliver extends StatelessWidget {
                         );
                       }),
                     ),
-                  )
-                else
+                  ),
+                ] else
                   Obx(() {
                     final status = store.getFriendStatus(player.id);
                     return _FriendPill(uid: player.id, status: status, store: store);
@@ -521,7 +538,7 @@ class _PartnersTab extends StatelessWidget {
       itemCount: partners.length,
       itemBuilder: (_, i) {
         final p = partners[i];
-        final isOwn = player.id == kMe.id;
+        final isOwn = player.id == AppController.to.currentUser.value.id;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(

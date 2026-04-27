@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/mock_data.dart';
 import '../../core/models/game.dart';
@@ -20,6 +21,7 @@ class HostController extends GetxController {
   final courtType  = 'Indoor'.obs; // Indoor | Outdoor
   final clubCtrl   = TextEditingController();
   final courtCtrl  = TextEditingController();
+  final pin        = Rx<LatLng?>(null);
 
   // Step 2 – Time
   final selectedWhen = 0.obs; // index into _whenOptions
@@ -103,6 +105,8 @@ class HostController extends GetxController {
       hot: false,
       totalCost: int.tryParse(totalCost.value) ?? 0,
       autoApprove: autoApprove.value,
+      pinLat: pin.value?.latitude,
+      pinLng: pin.value?.longitude,
     );
 
     store.addHostedGame(game);
@@ -310,27 +314,46 @@ class _Step1Court extends StatelessWidget {
           )),
 
           const SizedBox(height: 20),
-          // Map placeholder
           _SectionLabel('Pin location (optional)'),
           const SizedBox(height: 8),
-          Container(
-            height: 140,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.12)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.location_on_outlined, color: AppColors.ball, size: 32),
-                const SizedBox(height: 8),
-                Text('Tap to drop a pin', style: AppFonts.body(13, color: Colors.white.withOpacity(0.55))),
-                const SizedBox(height: 4),
-                Text('Google Maps · API key required', style: AppFonts.mono(9, color: Colors.white.withOpacity(0.28), letterSpacing: 0.3)),
-              ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 200,
+              child: Obx(() {
+                final p = ctrl.pin.value;
+                return GoogleMap(
+                  initialCameraPosition: const CameraPosition(
+                    target: LatLng(24.8607, 67.0011), // Karachi
+                    zoom: 11,
+                  ),
+                  onTap: (latLng) => ctrl.pin.value = latLng,
+                  markers: p == null
+                      ? const {}
+                      : {
+                          Marker(
+                            markerId: const MarkerId('host-pin'),
+                            position: p,
+                          ),
+                        },
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                  compassEnabled: false,
+                );
+              }),
             ),
           ),
+          const SizedBox(height: 6),
+          Obx(() {
+            final p = ctrl.pin.value;
+            return Text(
+              p == null
+                  ? 'Tap on the map to drop a pin (optional)'
+                  : 'Pinned at ${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
+              style: AppFonts.mono(10, color: Colors.white.withOpacity(0.45), letterSpacing: 0.2),
+            );
+          }),
         ],
       ),
     );

@@ -2,11 +2,13 @@ import 'package:get/get.dart';
 import '../../core/models/booking.dart';
 import '../../core/models/friend.dart';
 import '../../core/models/game.dart';
+import '../../core/models/player.dart';
 import '../../core/mock_data.dart';
 
 class AppController extends GetxController {
   static AppController get to => Get.find();
 
+  final currentUser  = Rx<Player>(kPlayers[0]);
   final bookings     = <Booking>[].obs;
   final friends      = <FriendEntry>[].obs;
   final requests     = <String, List<JoinRequest>>{}.obs;
@@ -14,6 +16,40 @@ class AppController extends GetxController {
   final friendChats  = <String, List<ChatMessage>>{}.obs;
   final hostedGames  = <Game>[].obs;
   final subscription = const Subscription(plan: 'trial', daysLeft: 23).obs;
+
+  void updateCurrentUser({
+    String? name,
+    String? handle,
+    String? email,
+    String? bio,
+    String? photoPath,
+    String? city,
+    int? age,
+    String? gender,
+    Map<String, String>? tags,
+  }) {
+    final cur = currentUser.value;
+    final newName = name ?? cur.name;
+    currentUser.value = cur.copyWith(
+      name: newName,
+      handle: handle ?? cur.handle,
+      email: email ?? cur.email,
+      bio: bio ?? cur.bio,
+      photoPath: photoPath ?? cur.photoPath,
+      city: city ?? cur.city,
+      age: age ?? cur.age,
+      gender: gender ?? cur.gender,
+      tags: tags ?? cur.tags,
+      initials: _initialsOf(newName),
+    );
+  }
+
+  static String _initialsOf(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '??';
+    if (parts.length == 1) return parts[0].substring(0, 1).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
 
   // Match phase for demo: 'upcoming' | 'reminder_30' | 'reminder_15' | 'finished'
   final matchPhase = 'upcoming'.obs;

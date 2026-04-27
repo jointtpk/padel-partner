@@ -11,6 +11,7 @@ import '../screens/inbox/inbox_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/edit_profile/edit_profile_screen.dart';
 import '../screens/subscription/subscription_screen.dart';
 import '../screens/match_finished/match_finished_screen.dart';
 
@@ -29,6 +30,7 @@ class AppPages {
     GetPage(name: Routes.chat,         page: () => const ChatScreen()),
     GetPage(name: Routes.friends,      page: () => const FriendsScreen()),
     GetPage(name: Routes.profile,      page: () => const ProfileScreen()),
+    GetPage(name: Routes.editProfile,  page: () => const EditProfileScreen()),
     GetPage(name: Routes.subscription, page: () => const SubscriptionScreen()),
     GetPage(name: Routes.matchFinished,page: () => const MatchFinishedScreen()),
   ];
