@@ -9,7 +9,7 @@ plugins {
 android {
     namespace = "com.padelpartner.app"
     compileSdk = 35
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973" // matches what Firebase + Maps + 11 other plugins want
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
