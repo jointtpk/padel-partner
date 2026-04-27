@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "97454348674",
+    "project_id": "padelpartner-74b7d",
+    "storage_bucket": "padelpartner-74b7d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:97454348674:android:14f2d60266d8a9ed01979b",
+        "android_client_info": {
+          "package_name": "com.example.padel_partner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD08nrT7bqQR8hMeDu3VycoSgOc6W7J5V0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:97454348674:android:6f8276b122bb6c2901979b",
+        "android_client_info": {
+          "package_name": "com.padelpartner.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD08nrT7bqQR8hMeDu3VycoSgOc6W7J5V0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

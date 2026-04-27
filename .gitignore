@@ -12,7 +12,8 @@ build/
 android/local.properties
 android/.gradle/
 android/key.properties
-android/app/google-services.json
+# google-services.json is committed so CI can build the APK.
+# Security relies on Firebase Security Rules + Auth, not on hiding this file.
 
 # iOS
 ios/.symlinks/
@@ -33,7 +34,5 @@ ios/Runner/GoogleService-Info.plist
 .DS_Store
 Thumbs.db
 
-# Firebase (never commit real credentials)
+# Firebase backups
 firebase_options.dart.bak
-google-services.json
-GoogleService-Info.plist

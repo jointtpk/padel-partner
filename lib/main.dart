@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -8,13 +9,13 @@ import 'app/routes.dart';
 import 'core/mock_data.dart';
 import 'core/services/user_storage.dart';
 import 'core/theme/tokens.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ── Firebase ──────────────────────────────────────────────────────────────
-  // Replace placeholder values in firebase_options.dart first, then uncomment:
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // ── System UI ─────────────────────────────────────────────────────────────
   SystemChrome.setSystemUIOverlayStyle(
