@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.padel_partner"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
