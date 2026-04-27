@@ -1,14 +1,17 @@
+import 'package:flutter/material.dart' show Color;
 import 'package:get/get.dart';
 import '../../core/models/booking.dart';
 import '../../core/models/friend.dart';
 import '../../core/models/game.dart';
 import '../../core/models/player.dart';
 import '../../core/mock_data.dart';
+import '../../core/services/user_storage.dart';
+import '../routes.dart';
 
 class AppController extends GetxController {
   static AppController get to => Get.find();
 
-  final currentUser  = Rx<Player>(kPlayers[0]);
+  final currentUser  = Rx<Player>(kMe);
   final bookings     = <Booking>[].obs;
   final friends      = <FriendEntry>[].obs;
   final requests     = <String, List<JoinRequest>>{}.obs;
@@ -30,7 +33,7 @@ class AppController extends GetxController {
   }) {
     final cur = currentUser.value;
     final newName = name ?? cur.name;
-    currentUser.value = cur.copyWith(
+    final next = cur.copyWith(
       name: newName,
       handle: handle ?? cur.handle,
       email: email ?? cur.email,
@@ -42,6 +45,37 @@ class AppController extends GetxController {
       tags: tags ?? cur.tags,
       initials: _initialsOf(newName),
     );
+    currentUser.value = next;
+    kMe = next; // keep top-level kMe in sync for legacy non-reactive reads
+    UserStorage.save(next);
+  }
+
+  /// Clears all local user state and returns to the sign-up screen.
+  Future<void> signOut() async {
+    await UserStorage.clear();
+    bookings.clear();
+    friends.clear();
+    requests.clear();
+    gameChats.clear();
+    friendChats.clear();
+    hostedGames.clear();
+    currentUser.value = const Player(
+      id: 'me',
+      name: 'You',
+      handle: '@you',
+      level: 1.0,
+      tier: 'rookie',
+      badge: 'Rookie',
+      avatarColor: Color(0xFFD5C7FF),
+      initials: 'YO',
+      city: '',
+      wins: 0,
+      games: 0,
+      age: 0,
+      gender: 'M',
+    );
+    kMe = currentUser.value;
+    Get.offAllNamed(Routes.signUp);
   }
 
   static String _initialsOf(String name) {
