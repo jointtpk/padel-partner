@@ -1,14 +1,11 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'app/app_pages.dart';
 import 'app/controllers/app_controller.dart';
-import 'app/controllers/auth_controller.dart';
 import 'app/routes.dart';
 import 'core/theme/tokens.dart';
-import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
