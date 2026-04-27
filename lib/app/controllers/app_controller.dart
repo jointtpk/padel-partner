@@ -8,7 +8,7 @@ import '../../core/mock_data.dart';
 class AppController extends GetxController {
   static AppController get to => Get.find();
 
-  final currentUser  = Rx<Player>(kPlayers[0]);
+  final currentUser  = Rx<Player>(kMe);
   final bookings     = <Booking>[].obs;
   final friends      = <FriendEntry>[].obs;
   final requests     = <String, List<JoinRequest>>{}.obs;
@@ -30,7 +30,7 @@ class AppController extends GetxController {
   }) {
     final cur = currentUser.value;
     final newName = name ?? cur.name;
-    currentUser.value = cur.copyWith(
+    final next = cur.copyWith(
       name: newName,
       handle: handle ?? cur.handle,
       email: email ?? cur.email,
@@ -42,6 +42,8 @@ class AppController extends GetxController {
       tags: tags ?? cur.tags,
       initials: _initialsOf(newName),
     );
+    currentUser.value = next;
+    kMe = next; // keep top-level kMe in sync for legacy non-reactive reads
   }
 
   static String _initialsOf(String name) {

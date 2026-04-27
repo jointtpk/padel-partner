@@ -149,7 +149,7 @@ class _HeroHeader extends StatelessWidget {
                   }),
                   GestureDetector(
                     onTap: () => Get.toNamed(Routes.profile),
-                    child: AvatarWidget(player: kMe, size: 40, ring: true),
+                    child: Obx(() => AvatarWidget(player: store.currentUser.value, size: 40, ring: true)),
                   ),
                 ],
               ),
@@ -172,10 +172,13 @@ class _HeroHeader extends StatelessWidget {
                 'Game on,',
                 style: AppFonts.display(42, color: Colors.white, height: 0.95, letterSpacing: -0.84),
               ),
-              Text(
-                'Zara.',
-                style: AppFonts.display(42, color: AppColors.ball, height: 0.95, letterSpacing: -0.84),
-              ),
+              Obx(() {
+                final firstName = store.currentUser.value.name.trim().split(' ').first;
+                return Text(
+                  '$firstName.',
+                  style: AppFonts.display(42, color: AppColors.ball, height: 0.95, letterSpacing: -0.84),
+                );
+              }),
               const SizedBox(height: 14),
               // XP bar
               Row(

@@ -5,14 +5,9 @@ import 'models/booking.dart';
 import 'models/friend.dart';
 
 // ─── Players ─────────────────────────────────────────────────────────────────
-const kPlayers = <Player>[
-  Player(id: 'u1', name: 'Zara A.',    handle: '@zaraplays',  level: 3.8, tier: 'pro',     badge: 'Pro',     avatarColor: Color(0xFFF4B1FF), initials: 'ZA', city: 'Clifton',     wins: 47, games: 112, age: 27, gender: 'F'),
-  Player(id: 'u2', name: 'Hassan M.',  handle: '@hasspadel', level: 4.6, tier: 'elite',   badge: 'Elite',   avatarColor: Color(0xFFB9E6FF), initials: 'HM', city: 'DHA Phase 6', wins: 63, games: 98,  age: 31, gender: 'M'),
-  Player(id: 'u3', name: 'Ayesha K.',  handle: '@ayekay',    level: 3.2, tier: 'regular', badge: 'Regular', avatarColor: Color(0xFFFFD56B), initials: 'AK', city: 'Bahria Town', wins: 28, games: 80,  age: 24, gender: 'F'),
-  Player(id: 'u4', name: 'Omar R.',    handle: '@omarr',     level: 4.1, tier: 'pro',     badge: 'Pro',     avatarColor: Color(0xFFC6FF9C), initials: 'OR', city: 'DHA Phase 8', wins: 54, games: 91,  age: 34, gender: 'M'),
-  Player(id: 'u5', name: 'Sara I.',    handle: '@saraislam', level: 2.0, tier: 'amateur', badge: 'Amateur', avatarColor: Color(0xFFFFC0B5), initials: 'SI', city: 'PECHS',       wins: 11, games: 38,  age: 22, gender: 'F'),
-  Player(id: 'u6', name: 'Bilal J.',   handle: '@bilalj',    level: 1.2, tier: 'rookie',  badge: 'Rookie',  avatarColor: Color(0xFFD5C7FF), initials: 'BJ', city: 'Clifton',     wins: 4,  games: 16,  age: 19, gender: 'M'),
-];
+// Real users will be added once backend integration ships.
+// kPlayers is intentionally empty so the app shows live data only.
+const kPlayers = <Player>[];
 
 Player? playerById(String id) {
   try {
@@ -22,58 +17,37 @@ Player? playerById(String id) {
   }
 }
 
-// ignore: prefer_const_declarations
-final kMe = kPlayers[0]; // current user = u1 (Zara A.)
+// Default placeholder used until the user finishes sign-up.
+const _kDefaultUser = Player(
+  id: 'me',
+  name: 'You',
+  handle: '@you',
+  level: 1.0,
+  tier: 'rookie',
+  badge: 'Rookie',
+  avatarColor: Color(0xFFD5C7FF),
+  initials: 'YO',
+  city: '',
+  wins: 0,
+  games: 0,
+  age: 0,
+  gender: 'M',
+);
+
+// Mutable: AppController.updateCurrentUser keeps this in sync so legacy
+// (non-reactive) reads of kMe still see the latest profile.
+Player kMe = _kDefaultUser;
 
 // ─── Games ───────────────────────────────────────────────────────────────────
-const kGames = <Game>[
-  Game(id: 'g1', club: 'Padel Up Karachi',   area: 'DHA Phase 8',    when: 'Today', time: '6:30 PM',  duration: '90 min',  level: 'Pro',     levelKey: 'pro',     price: 1200, spots: 1, total: 4, hostId: 'u2', playerIds: ['u2','u4','u1'], vibe: 'Competitive',        court: 'Court 2 · Indoor',   weather: 'Indoor',      hot: true),
-  Game(id: 'g2', club: 'The Padel Club',      area: 'Clifton',        when: 'Today', time: '9:00 PM',  duration: '60 min',  level: 'Regular', levelKey: 'regular', price: 900,  spots: 2, total: 4, hostId: 'u1', playerIds: ['u1','u6'],       vibe: 'Social',             court: 'Court 1 · Outdoor',  weather: '28°C · Clear',hot: false),
-  Game(id: 'g3', club: 'Bahria Padel Arena',  area: 'Bahria Town',    when: 'Tmrw',  time: '7:00 AM',  duration: '90 min',  level: 'Regular', levelKey: 'regular', price: 800,  spots: 1, total: 4, hostId: 'u3', playerIds: ['u3','u5','u6'],  vibe: 'Practice',           court: 'Court 4 · Outdoor',  weather: '24°C · Cloudy', hot: false),
-  Game(id: 'g4', club: 'Smash Padel',         area: 'DHA Phase 6',    when: 'Sat',   time: '5:00 PM',  duration: '90 min',  level: 'Elite',   levelKey: 'elite',   price: 1400, spots: 3, total: 4, hostId: 'u4', playerIds: ['u4'],             vibe: 'Competitive',        court: 'Court 1 · Indoor',   weather: 'Indoor',      hot: true),
-  Game(id: 'g5', club: 'Padel Up Karachi',    area: 'DHA Phase 8',    when: 'Sun',   time: '11:00 AM', duration: '60 min',  level: 'Rookie+', levelKey: 'rookie',  price: 700,  spots: 2, total: 4, hostId: 'u5', playerIds: ['u5','u1'],        vibe: 'Beginner-friendly',  court: 'Court 3 · Indoor',   weather: 'Indoor',      hot: false),
-];
+// Real games will appear once users host them — no seed games.
+const kGames = <Game>[];
 
 // ─── Initial store state ──────────────────────────────────────────────────────
-final kInitialBookings = <Booking>[
-  const Booking(gameId: 'g1', status: 'confirmed'),
-];
-
-final kInitialFriends = <FriendEntry>[
-  const FriendEntry(userId: 'u2', status: 'friends'),
-  const FriendEntry(userId: 'u4', status: 'friends'),
-  const FriendEntry(userId: 'u3', status: 'pending_in'),
-  const FriendEntry(userId: 'u6', status: 'pending_out'),
-];
-
-final kInitialRequests = <String, List<JoinRequest>>{
-  'g4': [
-    const JoinRequest(userId: 'u3', when: '2h ago', note: 'Keen, 4.0 level, can bring balls'),
-    const JoinRequest(userId: 'u6', when: '30m ago', note: 'Down for Saturday!'),
-  ],
-  'g2': [
-    const JoinRequest(userId: 'u5', when: '45m ago', note: 'First time — promise I can rally'),
-  ],
-};
-
-final kInitialGameChats = <String, List<ChatMessage>>{
-  'g1': [
-    const ChatMessage(from: 'u2', text: 'yo team — bringing two extra paddles if anyone needs 🎾', t: '7:14 PM'),
-    const ChatMessage(from: 'me', text: 'perfect, mine is cracked lol', t: '7:16 PM'),
-    const ChatMessage(from: 'u4', text: 'parking is painful at padel up btw, come 15 min early', t: '7:18 PM'),
-  ],
-};
-
-final kInitialFriendChats = <String, List<ChatMessage>>{
-  'u2': [
-    const ChatMessage(from: 'u2', text: 'bro that volley yesterday 🔥', t: 'Yesterday'),
-    const ChatMessage(from: 'me', text: 'haha lucky swing', t: 'Yesterday'),
-  ],
-  'u4': [
-    const ChatMessage(from: 'me', text: 'sunday 5pm still on?', t: '2d'),
-    const ChatMessage(from: 'u4', text: '100% booked court 3', t: '2d'),
-  ],
-};
+const kInitialBookings    = <Booking>[];
+const kInitialFriends     = <FriendEntry>[];
+const kInitialRequests    = <String, List<JoinRequest>>{};
+const kInitialGameChats   = <String, List<ChatMessage>>{};
+const kInitialFriendChats = <String, List<ChatMessage>>{};
 
 // Pakistan cities + areas
 const kPkCities = [
