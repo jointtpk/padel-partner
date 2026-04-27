@@ -381,7 +381,7 @@ class _StepOtp extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Obx(() => Text.rich(
+        Text.rich(
           TextSpan(
             text: 'We texted a 4-digit code to ',
             style: AppFonts.body(13, color: Colors.white.withOpacity(0.70)),
@@ -392,8 +392,7 @@ class _StepOtp extends StatelessWidget {
               ),
             ],
           ),
-        )),
-
+        ),
         const SizedBox(height: 28),
 
         Center(
@@ -566,10 +565,13 @@ class _StepProfile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _FieldLabel(label: 'BIO', optional: true),
-            Obx(() => Text(
-              '${ctrl.bioText.value.length}/100',
-              style: AppFonts.mono(10, color: Colors.white.withOpacity(0.50)),
-            )),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: ctrl.bioController,
+              builder: (_, v, __) => Text(
+                '${v.text.length}/100',
+                style: AppFonts.mono(10, color: Colors.white.withOpacity(0.50)),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),
