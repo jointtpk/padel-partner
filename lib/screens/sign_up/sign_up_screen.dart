@@ -168,8 +168,10 @@ class _CTA extends StatelessWidget {
       ),
       child: Obx(() {
         final valid = ctrl.currentStepValid;
+        final loading = ctrl.isLoading.value;
+        final tappable = valid && !loading;
         return GestureDetector(
-          onTap: valid ? ctrl.proceed : null,
+          onTap: tappable ? ctrl.proceed : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             width: double.infinity,
@@ -182,13 +184,25 @@ class _CTA extends StatelessWidget {
                   : [],
             ),
             child: Center(
-              child: Text(
-                ctrl.step.value < 4 ? 'Continue →' : 'Finish & play →',
-                style: AppFonts.display(16,
-                  color: valid ? AppColors.ink : Colors.white.withOpacity(0.40),
-                  letterSpacing: 0.32,
-                ),
-              ),
+              child: loading
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.ink),
+                      ),
+                    )
+                  : Text(
+                      ctrl.step.value == 1
+                          ? 'Send code →'
+                          : ctrl.step.value < 4
+                              ? 'Continue →'
+                              : 'Finish & play →',
+                      style: AppFonts.display(16,
+                        color: valid ? AppColors.ink : Colors.white.withOpacity(0.40),
+                        letterSpacing: 0.32,
+                      ),
+                    ),
             ),
           ),
         );
@@ -303,7 +317,7 @@ class _StepInfo extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        _FieldLabel(label: 'EMAIL', optional: true),
+        _FieldLabel(label: 'EMAIL', required: true),
         const SizedBox(height: 6),
         _AppTextField(
           controller: ctrl.emailController,
@@ -383,11 +397,11 @@ class _StepOtp extends StatelessWidget {
         const SizedBox(height: 8),
         Text.rich(
           TextSpan(
-            text: 'We texted a 4-digit code to ',
+            text: 'We emailed a 4-digit code to ',
             style: AppFonts.body(13, color: Colors.white.withOpacity(0.70)),
             children: [
               TextSpan(
-                text: '+92 ${ctrl.phoneText.value.isNotEmpty ? ctrl.phoneText.value : '300 1234567'}',
+                text: ctrl.maskedEmail,
                 style: AppFonts.body(13, color: Colors.white, weight: FontWeight.w700),
               ),
             ],
@@ -413,18 +427,18 @@ class _StepOtp extends StatelessWidget {
           child: Column(
             children: [
               GestureDetector(
-                onTap: () => ctrl.otpController.clear(),
-                child: Text(
-                  'RESEND CODE',
+                onTap: ctrl.resendCode,
+                child: Obx(() => Text(
+                  ctrl.isLoading.value ? 'SENDING…' : 'RESEND CODE',
                   style: AppFonts.mono(11,
                     color: AppColors.ball,
                     letterSpacing: 0.15,
                   ).copyWith(decoration: TextDecoration.underline),
-                ),
+                )),
               ),
               const SizedBox(height: 8),
               Text(
-                "Didn't get it? Check spam or try again in 30s.",
+                "Didn't get it? Check spam or junk folder.",
                 style: AppFonts.body(12, color: Colors.white.withOpacity(0.50)),
               ),
             ],
