@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../theme/tokens.dart';
@@ -16,28 +17,45 @@ class AvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final photo = player.photoPath;
+    final hasPhoto = photo != null && photo.isNotEmpty;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: player.avatarColor,
+        color: hasPhoto ? null : player.avatarColor,
         border: ring ? Border.all(color: AppColors.ball, width: 2) : null,
         boxShadow: const [
           BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1)),
         ],
+        image: hasPhoto
+            ? DecorationImage(
+                image: _imageProviderFor(photo),
+                fit: BoxFit.cover,
+              )
+            : null,
       ),
-      child: Center(
-        child: Text(
-          player.initials,
-          style: AppFonts.display(
-            size * 0.38,
-            color: AppColors.ink,
-            letterSpacing: size * -0.007,
-          ),
-        ),
-      ),
+      child: hasPhoto
+          ? null
+          : Center(
+              child: Text(
+                player.initials,
+                style: AppFonts.display(
+                  size * 0.38,
+                  color: AppColors.ink,
+                  letterSpacing: size * -0.007,
+                ),
+              ),
+            ),
     );
+  }
+
+  ImageProvider _imageProviderFor(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return NetworkImage(path);
+    }
+    return FileImage(File(path));
   }
 }
 

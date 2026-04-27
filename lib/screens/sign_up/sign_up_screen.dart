@@ -324,6 +324,7 @@ class _StepInfo extends StatelessWidget {
           controller: ctrl.emailController,
           placeholder: 'you@email.com',
           keyboardType: TextInputType.emailAddress,
+          onChanged: (_) => ctrl.step.refresh(),
         ),
 
         const SizedBox(height: 24),

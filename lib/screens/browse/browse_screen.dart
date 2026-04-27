@@ -25,12 +25,19 @@ class BrowseController extends GetxController {
   }
 
   List<Game> get filtered {
+    // Touch all reactive deps unconditionally so Obx subscribes even when
+    // the source list is empty (otherwise predicate body never runs).
+    final lvl  = selectedLevel.value;
+    final vib  = selectedVibe.value;
+    final wh   = selectedWhen.value;
+    final ar   = selectedArea.value;
+    final q    = searchQuery.value.toLowerCase();
+
     return kGames.where((g) {
-      if (selectedLevel.value != 'all' && g.levelKey != selectedLevel.value) return false;
-      if (selectedVibe.value  != 'all' && g.vibe.toLowerCase() != selectedVibe.value) return false;
-      if (selectedWhen.value  != 'all' && g.when.toLowerCase() != selectedWhen.value) return false;
-      if (selectedArea.value  != 'all' && g.area != selectedArea.value) return false;
-      final q = searchQuery.value.toLowerCase();
+      if (lvl != 'all' && g.levelKey != lvl) return false;
+      if (vib != 'all' && g.vibe.toLowerCase() != vib) return false;
+      if (wh  != 'all' && g.when.toLowerCase() != wh) return false;
+      if (ar  != 'all' && g.area != ar) return false;
       if (q.isNotEmpty) {
         final match = g.club.toLowerCase().contains(q) ||
                       g.area.toLowerCase().contains(q) ||

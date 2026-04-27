@@ -154,19 +154,25 @@ class _HeroHeader extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 18),
-              // Streak badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.hot,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '🔥 3-DAY STREAK',
-                  style: AppFonts.mono(10, color: Colors.white, weight: FontWeight.w700, letterSpacing: 0.10),
-                ),
-              ),
-              const SizedBox(height: 10),
+              // Streak badge — only when user has played some games
+              Obx(() {
+                final games = store.currentUser.value.games;
+                if (games < 3) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.hot,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '🔥 $games GAMES PLAYED',
+                      style: AppFonts.mono(10, color: Colors.white, weight: FontWeight.w700, letterSpacing: 0.10),
+                    ),
+                  ),
+                );
+              }),
               // Headline
               Text(
                 'Game on,',
@@ -180,36 +186,44 @@ class _HeroHeader extends StatelessWidget {
                 );
               }),
               const SizedBox(height: 14),
-              // XP bar
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: Stack(
-                        children: [
-                          Container(height: 6, color: Colors.white.withOpacity(0.15)),
-                          FractionallySizedBox(
-                            widthFactor: 0.68,
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: AppColors.ball,
-                                boxShadow: [BoxShadow(color: AppColors.ball.withOpacity(0.53), blurRadius: 12)],
+              // XP bar — derived from current user's level + tier
+              Obx(() {
+                final user = store.currentUser.value;
+                final tier = levelByKey(user.tier);
+                final progress = ((user.level - tier.rangeMin) /
+                        (tier.rangeMax - tier.rangeMin))
+                    .clamp(0.0, 1.0);
+                final remaining = (tier.rangeMax - user.level).clamp(0.0, double.infinity);
+                return Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: Stack(
+                          children: [
+                            Container(height: 6, color: Colors.white.withOpacity(0.15)),
+                            FractionallySizedBox(
+                              widthFactor: progress,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: AppColors.ball,
+                                  boxShadow: [BoxShadow(color: AppColors.ball.withOpacity(0.53), blurRadius: 12)],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'LVL 3 · 2 TO GO',
-                    style: AppFonts.mono(10, color: AppColors.ball, weight: FontWeight.w700, letterSpacing: 0.10),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'LVL ${user.level.toStringAsFixed(1)} · ${remaining.toStringAsFixed(1)} TO GO',
+                      style: AppFonts.mono(10, color: AppColors.ball, weight: FontWeight.w700, letterSpacing: 0.10),
+                    ),
+                  ],
+                );
+              }),
             ],
           ),
         ],

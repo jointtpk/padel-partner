@@ -49,9 +49,9 @@ class HostController extends GetxController {
 
   // Validation
   bool get step1Valid =>
-      clubCtrl.text.trim().isNotEmpty &&
+      club.value.trim().isNotEmpty &&
       area.value.isNotEmpty &&
-      courtCtrl.text.trim().isNotEmpty;
+      court.value.trim().isNotEmpty;
 
   bool get step2Valid => true; // always valid — defaults set
 
@@ -281,7 +281,7 @@ class _Step1Court extends StatelessWidget {
           const SizedBox(height: 20),
           _SectionLabel('Court name / number'),
           const SizedBox(height: 8),
-          _TextInput(controller: ctrl.courtCtrl, hint: 'e.g. Court 2', onChanged: (_) {}),
+          _TextInput(controller: ctrl.courtCtrl, hint: 'e.g. Court 2', onChanged: (_) => ctrl.court.value = ctrl.courtCtrl.text),
 
           const SizedBox(height: 20),
           _SectionLabel('Court type'),
