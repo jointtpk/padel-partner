@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.padelpartner.app"
-        minSdk = 23 // Firebase Auth requires 23+
+        minSdk = flutter.minSdkVersion // Firebase Auth requires 23+
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
