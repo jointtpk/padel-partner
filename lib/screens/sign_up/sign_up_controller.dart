@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart';
-// import '../../app/controllers/auth_controller.dart';
 
 class SignUpController extends GetxController {
   // ── Step ──────────────────────────────────────────────────────────────────
@@ -66,8 +66,25 @@ class SignUpController extends GetxController {
     } else if (step.value < 4) {
       step.value++;
     } else {
+      _saveProfile();
       Get.offAllNamed(Routes.home);
     }
+  }
+
+  void _saveProfile() {
+    final age = dob.value == null
+        ? null
+        : DateTime.now().year - dob.value!.year;
+    final username = usernameController.text.trim();
+    AppController.to.updateCurrentUser(
+      name: nameController.text.trim(),
+      handle: username.isEmpty ? null : '@$username',
+      email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+      bio: bioController.text.trim().isEmpty ? null : bioController.text.trim(),
+      photoPath: photoPath.value,
+      age: age,
+      tags: Map<String, String>.from(tags),
+    );
   }
 
   void goBack() {

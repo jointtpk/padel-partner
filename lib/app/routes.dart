@@ -12,6 +12,7 @@ abstract class Routes {
   static const chat        = '/chat';
   static const friends     = '/friends';
   static const profile     = '/profile';
+  static const editProfile = '/edit-profile';
   static const subscription = '/subscription';
   static const matchFinished = '/match-finished';
 }
