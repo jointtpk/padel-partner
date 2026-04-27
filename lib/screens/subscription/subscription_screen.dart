@@ -484,6 +484,191 @@ class _FaqItemState extends State<_FaqItem> {
   }
 }
 
+// ─── Upgrade confirmation sheet ───────────────────────────────────────────────
+
+void _showUpgradeConfirm(BuildContext context, AppController store) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => const _UpgradeConfirmSheet(),
+  ).then((_) {});
+}
+
+class _UpgradeConfirmSheet extends StatefulWidget {
+  const _UpgradeConfirmSheet();
+
+  @override
+  State<_UpgradeConfirmSheet> createState() => _UpgradeConfirmSheetState();
+}
+
+class _UpgradeConfirmSheetState extends State<_UpgradeConfirmSheet> {
+  bool _processing = false;
+
+  Future<void> _confirm() async {
+    if (_processing) return;
+    setState(() => _processing = true);
+    HapticFeedback.mediumImpact();
+    // TODO: replace with real in_app_purchase flow once configured.
+    // For now we simulate the Google Play billing round-trip.
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    AppController.to.subscription.value =
+        const Subscription(plan: 'pro', daysLeft: 0);
+    Navigator.of(context).pop();
+    Get.back();
+    Get.snackbar(
+      '',
+      '',
+      titleText: Text("You're now on Pro! ⭐",
+          style: AppFonts.display(14, color: AppColors.ink)),
+      messageText: Text('Enjoy unlimited access to Padel Partner.',
+          style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.65))),
+      backgroundColor: AppColors.ball,
+      borderRadius: 14,
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, bottom + 20),
+      decoration: const BoxDecoration(
+        color: AppColors.blue900,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.20),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text('Confirm upgrade',
+              style: AppFonts.display(22, color: Colors.white, letterSpacing: -0.4)),
+          const SizedBox(height: 6),
+          Text(
+            'You\'re subscribing to Padel Partner Pro. Payment is processed by Google Play.',
+            style: AppFonts.body(13, color: Colors.white.withOpacity(0.60), height: 1.5),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.10)),
+            ),
+            child: Column(
+              children: [
+                _SummaryRow(label: 'Plan', value: 'Pro · Monthly'),
+                const SizedBox(height: 10),
+                _SummaryRow(label: 'Price', value: 'Rs 100 / month'),
+                const SizedBox(height: 10),
+                _SummaryRow(label: 'Billed via', value: 'Google Play'),
+                const SizedBox(height: 10),
+                _SummaryRow(label: 'Cancel', value: 'Anytime'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'You\'ll be charged Rs 100 today and the same amount each month until you cancel. Manage your subscription in Google Play any time.',
+            style: AppFonts.body(11, color: Colors.white.withOpacity(0.45), height: 1.5),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: _processing ? null : () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(0.14)),
+                    ),
+                    child: Center(
+                      child: Text('Cancel',
+                          style: AppFonts.body(15,
+                              color: Colors.white, weight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: _processing ? null : _confirm,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: _processing
+                          ? AppColors.ball.withOpacity(0.55)
+                          : AppColors.ball,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: _processing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(AppColors.ink),
+                              ),
+                            )
+                          : Text('Pay Rs 100 & subscribe',
+                              style: AppFonts.body(15,
+                                  color: AppColors.ink,
+                                  weight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(label,
+            style: AppFonts.mono(11,
+                color: Colors.white.withOpacity(0.45), letterSpacing: 0.4)),
+        const Spacer(),
+        Text(value,
+            style: AppFonts.body(13, color: Colors.white, weight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
 // ─── Sticky upgrade CTA ───────────────────────────────────────────────────────
 
 class _StickyUpgradeCta extends StatelessWidget {
@@ -510,20 +695,7 @@ class _StickyUpgradeCta extends StatelessWidget {
           GestureDetector(
             onTap: () {
               HapticFeedback.mediumImpact();
-              // In production: launch in_app_purchase flow here
-              // For scaffold: directly upgrade the subscription state
-              store.subscription.value = const Subscription(plan: 'pro', daysLeft: 0);
-              Get.back();
-              Get.snackbar(
-                '',
-                '',
-                titleText: Text('You\'re now on Pro! ⭐', style: AppFonts.display(14, color: AppColors.ink)),
-                messageText: Text('Enjoy unlimited access to Padel Partner.', style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.65))),
-                backgroundColor: AppColors.ball,
-                borderRadius: 14,
-                margin: const EdgeInsets.all(16),
-                duration: const Duration(seconds: 3),
-              );
+              _showUpgradeConfirm(context, store);
             },
             child: Container(
               width: double.infinity,

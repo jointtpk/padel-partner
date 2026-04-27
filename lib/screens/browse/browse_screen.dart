@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../app/controllers/app_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/mock_data.dart';
 import '../../core/models/game.dart';
@@ -33,7 +34,18 @@ class BrowseController extends GetxController {
     final ar   = selectedArea.value;
     final q    = searchQuery.value.toLowerCase();
 
-    return kGames.where((g) {
+    final store = AppController.to;
+    // Touch hostedGames length so Obx subscribes.
+    // ignore: unused_local_variable
+    final hostedLen = store.hostedGames.length;
+    // Combine seeded games + all hosted games (own listings appear too,
+    // useful for verifying a publish and for previewing to friends).
+    final pool = <Game>[
+      ...kGames,
+      ...store.hostedGames,
+    ];
+
+    return pool.where((g) {
       if (lvl != 'all' && g.levelKey != lvl) return false;
       if (vib != 'all' && g.vibe.toLowerCase() != vib) return false;
       if (wh  != 'all' && g.when.toLowerCase() != wh) return false;

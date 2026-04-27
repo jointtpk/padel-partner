@@ -61,6 +61,27 @@ class HostController extends GetxController {
     return t > 0 && vibe.value.isNotEmpty;
   }
 
+  /// Returns null when the current step is valid, otherwise a short message
+  /// describing what's missing.
+  String? validationError() {
+    switch (step.value) {
+      case 1:
+        final missing = <String>[];
+        if (club.value.trim().isEmpty) missing.add('club name');
+        if (area.value.isEmpty) missing.add('area');
+        if (court.value.trim().isEmpty) missing.add('court name');
+        if (missing.isEmpty) return null;
+        return 'Please add ${missing.join(', ')}.';
+      case 3:
+        final t = int.tryParse(totalCost.value) ?? 0;
+        if (t <= 0) return 'Enter the total court cost.';
+        if (vibe.value.isEmpty) return 'Pick a game vibe.';
+        return null;
+      default:
+        return null;
+    }
+  }
+
   void nextStep() {
     if (step.value < 4) step.value++;
   }
@@ -849,7 +870,28 @@ class _CtaBar extends StatelessWidget {
           border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
         ),
         child: GestureDetector(
-          onTap: isValid ? (isLast ? ctrl.publish : ctrl.nextStep) : null,
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (!isValid) {
+              final msg = ctrl.validationError() ?? 'Please complete this step.';
+              Get.snackbar(
+                '',
+                '',
+                titleText: Text('Hold up 👋', style: AppFonts.display(13, color: AppColors.ink)),
+                messageText: Text(msg, style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.7))),
+                backgroundColor: AppColors.ball,
+                borderRadius: 14,
+                margin: const EdgeInsets.all(16),
+                duration: const Duration(seconds: 2),
+              );
+              return;
+            }
+            if (isLast) {
+              ctrl.publish();
+            } else {
+              ctrl.nextStep();
+            }
+          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             width: double.infinity,

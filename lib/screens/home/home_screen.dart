@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart';
@@ -298,7 +299,7 @@ class _UpcomingSection extends StatelessWidget {
               )
             else
               SizedBox(
-                height: 176,
+                height: 204,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -443,17 +444,25 @@ class _UpcomingCard extends StatelessWidget {
                 ),
                 if (isHosting && g.spots > 0) ...[
                   const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.ball,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '🎾 SHARE TO FILL ${g.spots} SPOT${g.spots > 1 ? 'S' : ''}',
-                      textAlign: TextAlign.center,
-                      style: AppFonts.mono(9, color: AppColors.ink, letterSpacing: 0.12),
+                  GestureDetector(
+                    onTap: () {
+                      final text =
+                          'Join my padel game at ${g.club} (${g.area}) — ${g.when} ${g.time}. '
+                          '${g.spots} spot${g.spots > 1 ? 's' : ''} open on Padel Partner.';
+                      Share.share(text);
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.ball,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '🎾 SHARE TO FILL ${g.spots} SPOT${g.spots > 1 ? 'S' : ''}',
+                        textAlign: TextAlign.center,
+                        style: AppFonts.mono(9, color: AppColors.ink, letterSpacing: 0.12),
+                      ),
                     ),
                   ),
                 ],
@@ -616,9 +625,14 @@ class _FeedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Filter out games the user has already booked
+      // Filter out games the user has already booked or is hosting themselves
       final bookedIds = store.bookings.map((b) => b.gameId).toSet();
-      final feed = kGames.where((g) => !bookedIds.contains(g.id)).toList();
+      final myId = store.currentUser.value.id;
+      final feed = <Game>[
+        ...kGames.where((g) => !bookedIds.contains(g.id)),
+        ...store.hostedGames.where((g) =>
+            g.hostId != myId && !bookedIds.contains(g.id)),
+      ];
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,34 +656,84 @@ class _FeedSection extends StatelessWidget {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                // First 2 games
-                ...feed.take(2).map((g) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GameCard(
-                    game: g,
-                    onTap: () => Get.toNamed(Routes.detail, arguments: g),
+          if (feed.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('🎾', style: TextStyle(fontSize: 32)),
+                        const SizedBox(height: 10),
+                        Text(
+                          'No open courts right now',
+                          style: AppFonts.display(14, color: AppColors.ink, letterSpacing: -0.2),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Be the first — host a match and friends can join.',
+                          textAlign: TextAlign.center,
+                          style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.55)),
+                        ),
+                        const SizedBox(height: 14),
+                        GestureDetector(
+                          onTap: () => Get.toNamed(Routes.host),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: AppColors.ink,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Host a match',
+                              style: AppFonts.body(13, color: Colors.white, weight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )),
-                // Ad banner
-                if (store.subscription.value.plan != 'pro') ...[
-                  const AdBanner(variant: 'court'),
-                  const SizedBox(height: 12),
+                  if (store.subscription.value.plan != 'pro') ...[
+                    const SizedBox(height: 12),
+                    const AdBanner(variant: 'court'),
+                  ],
                 ],
-                // Remaining games
-                ...feed.skip(2).map((g) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GameCard(
-                    game: g,
-                    onTap: () => Get.toNamed(Routes.detail, arguments: g),
-                  ),
-                )),
-              ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  ...feed.take(2).map((g) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GameCard(
+                      game: g,
+                      onTap: () => Get.toNamed(Routes.detail, arguments: g),
+                    ),
+                  )),
+                  if (store.subscription.value.plan != 'pro') ...[
+                    const AdBanner(variant: 'court'),
+                    const SizedBox(height: 12),
+                  ],
+                  ...feed.skip(2).map((g) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GameCard(
+                      game: g,
+                      onTap: () => Get.toNamed(Routes.detail, arguments: g),
+                    ),
+                  )),
+                ],
+              ),
             ),
-          ),
         ],
       );
     });
