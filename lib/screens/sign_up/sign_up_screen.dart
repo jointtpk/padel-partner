@@ -59,7 +59,7 @@ class SignUpScreen extends StatelessWidget {
             child: Column(
               children: [
                 // Header: back button + step counter + progress bar
-                Obx(() => _Header(ctrl: ctrl)),
+                _Header(ctrl: ctrl),
                 // Scrollable step content
                 Expanded(
                   child: SingleChildScrollView(
@@ -73,7 +73,7 @@ class SignUpScreen extends StatelessWidget {
           // Sticky CTA
           Positioned(
             bottom: 0, left: 0, right: 0,
-            child: Obx(() => _CTA(ctrl: ctrl)),
+            child: _CTA(ctrl: ctrl),
           ),
         ],
       ),
@@ -119,17 +119,17 @@ class _Header extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(
+              Obx(() => Text(
                 'STEP ${ctrl.step.value} OF 4',
                 style: AppFonts.mono(10, color: Colors.white.withOpacity(0.60), letterSpacing: 0.20),
-              ),
+              )),
               const Spacer(),
               const SizedBox(width: 40), // mirror of back button
             ],
           ),
           const SizedBox(height: 14),
           // Progress bar
-          Row(
+          Obx(() => Row(
             children: List.generate(4, (i) {
               final active = i < ctrl.step.value;
               return Expanded(
@@ -143,7 +143,7 @@ class _Header extends StatelessWidget {
                 ),
               );
             }),
-          ),
+          )),
         ],
       ),
     );
@@ -157,7 +157,6 @@ class _CTA extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final valid = ctrl.currentStepValid;
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 14, 16, 28 + bottomPad),
@@ -169,30 +168,33 @@ class _CTA extends StatelessWidget {
           stops: const [0.0, 0.40],
         ),
       ),
-      child: GestureDetector(
-        onTap: valid ? ctrl.proceed : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: valid ? AppColors.ball : Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: valid
-                ? [BoxShadow(color: AppColors.ball.withOpacity(0.33), blurRadius: 28, offset: const Offset(0, 10))]
-                : [],
-          ),
-          child: Center(
-            child: Obx(() => Text(
-              ctrl.step.value < 4 ? 'Continue →' : 'Finish & play →',
-              style: AppFonts.display(16,
-                color: valid ? AppColors.ink : Colors.white.withOpacity(0.40),
-                letterSpacing: 0.32,
+      child: Obx(() {
+        final valid = ctrl.currentStepValid;
+        return GestureDetector(
+          onTap: valid ? ctrl.proceed : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: valid ? AppColors.ball : Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: valid
+                  ? [BoxShadow(color: AppColors.ball.withOpacity(0.33), blurRadius: 28, offset: const Offset(0, 10))]
+                  : [],
+            ),
+            child: Center(
+              child: Text(
+                ctrl.step.value < 4 ? 'Continue →' : 'Finish & play →',
+                style: AppFonts.display(16,
+                  color: valid ? AppColors.ink : Colors.white.withOpacity(0.40),
+                  letterSpacing: 0.32,
+                ),
               ),
-            )),
+            ),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }
