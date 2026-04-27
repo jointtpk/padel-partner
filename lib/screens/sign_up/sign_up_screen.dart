@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pinput/pinput.dart';
 
+import '../../app/routes.dart';
 import '../../core/theme/tokens.dart';
 import 'sign_up_controller.dart';
 
@@ -323,6 +324,26 @@ class _StepInfo extends StatelessWidget {
           controller: ctrl.emailController,
           placeholder: 'you@email.com',
           keyboardType: TextInputType.emailAddress,
+        ),
+
+        const SizedBox(height: 24),
+        Center(
+          child: GestureDetector(
+            onTap: () => Get.offAllNamed(Routes.signIn),
+            child: Text.rich(
+              TextSpan(
+                text: 'Already have an account? ',
+                style: AppFonts.body(13, color: Colors.white.withOpacity(0.55)),
+                children: [
+                  TextSpan(
+                    text: 'Sign in',
+                    style: AppFonts.body(13, color: AppColors.ball, weight: FontWeight.w700)
+                        .copyWith(decoration: TextDecoration.underline),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );

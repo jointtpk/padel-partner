@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'routes.dart';
 import '../screens/sign_up/sign_up_screen.dart';
+import '../screens/sign_in/sign_in_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/browse/browse_screen.dart';
 import '../screens/detail/detail_screen.dart';
@@ -20,6 +21,7 @@ class AppPages {
 
   static final routes = <GetPage>[
     GetPage(name: Routes.signUp,       page: () => const SignUpScreen()),
+    GetPage(name: Routes.signIn,       page: () => const SignInScreen()),
     GetPage(name: Routes.home,         page: () => const HomeScreen()),
     GetPage(name: Routes.browse,       page: () => const BrowseScreen()),
     GetPage(name: Routes.detail,       page: () => const DetailScreen()),

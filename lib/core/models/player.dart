@@ -87,6 +87,7 @@ class Player {
         'level': level,
         'tier': tier,
         'badge': badge,
+        'avatarColor': avatarColor.value,
         'initials': initials,
         'city': city,
         'wins': wins,
@@ -98,4 +99,24 @@ class Player {
         'photoPath': photoPath,
         'tags': tags,
       };
+
+  factory Player.fromMap(Map<String, dynamic> m) => Player(
+        id: m['id'] as String,
+        name: m['name'] as String,
+        handle: m['handle'] as String,
+        level: (m['level'] as num).toDouble(),
+        tier: m['tier'] as String,
+        badge: m['badge'] as String,
+        avatarColor: Color((m['avatarColor'] as num?)?.toInt() ?? 0xFFD5C7FF),
+        initials: m['initials'] as String,
+        city: m['city'] as String,
+        wins: m['wins'] as int,
+        games: m['games'] as int,
+        age: m['age'] as int,
+        gender: m['gender'] as String,
+        email: m['email'] as String?,
+        bio: m['bio'] as String?,
+        photoPath: m['photoPath'] as String?,
+        tags: (m['tags'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? const {},
+      );
 }

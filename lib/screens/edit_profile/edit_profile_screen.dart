@@ -204,12 +204,56 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       maxLines: 3,
                       maxLength: 100,
                     ),
+
+                    const SizedBox(height: 36),
+                    GestureDetector(
+                      onTap: _confirmSignOut,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.hot.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.hot.withOpacity(0.40)),
+                        ),
+                        child: Center(
+                          child: Text('Sign out',
+                              style: AppFonts.display(14, color: AppColors.hot, letterSpacing: 0.3)),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmSignOut() {
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: AppColors.blue900,
+        title: Text('Sign out?', style: AppFonts.display(20, color: Colors.white)),
+        content: Text(
+          'You will need to sign in again with your email to get back in.',
+          style: AppFonts.body(13, color: Colors.white.withOpacity(0.70)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Get.back,
+            child: Text('Cancel', style: AppFonts.body(13, color: Colors.white.withOpacity(0.70))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Get.back(); // close dialog
+              await _store.signOut();
+            },
+            child: Text('Sign out', style: AppFonts.body(13, color: AppColors.hot, weight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }

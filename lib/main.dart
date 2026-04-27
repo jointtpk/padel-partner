@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'app/app_pages.dart';
 import 'app/controllers/app_controller.dart';
 import 'app/routes.dart';
+import 'core/mock_data.dart';
+import 'core/services/user_storage.dart';
 import 'core/theme/tokens.dart';
 
 void main() async {
@@ -23,15 +25,19 @@ void main() async {
   );
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  // ── Load persisted user (if any) before deciding initial route ────────────
+  final saved = await UserStorage.load();
+  if (saved != null) kMe = saved;
+
   // ── GetX global controllers ───────────────────────────────────────────────
   Get.put(AppController(), permanent: true);
-  // Get.put(AuthController(), permanent: true); // enable after Firebase setup
 
-  runApp(const PadelPartnerApp());
+  runApp(PadelPartnerApp(initialRoute: saved != null ? Routes.home : Routes.signUp));
 }
 
 class PadelPartnerApp extends StatelessWidget {
-  const PadelPartnerApp({super.key});
+  const PadelPartnerApp({super.key, required this.initialRoute});
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +45,7 @@ class PadelPartnerApp extends StatelessWidget {
       title: 'Padel Partner',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      initialRoute: Routes.signUp,
+      initialRoute: initialRoute,
       getPages: AppPages.routes,
       defaultTransition: Transition.cupertino,
       transitionDuration: const Duration(milliseconds: 300),
