@@ -21,6 +21,7 @@ class Game {
     this.address,
     this.pinLat,
     this.pinLng,
+    this.mapLink,
     this.autoApprove = false,
   });
 
@@ -45,6 +46,7 @@ class Game {
   final String? address;
   final double? pinLat;
   final double? pinLng;
+  final String? mapLink;
   final bool autoApprove;
 
   Game copyWith({
@@ -53,7 +55,7 @@ class Game {
     int? spots, int? total, String? hostId, List<String>? playerIds,
     String? vibe, String? court, String? weather, bool? hot,
     int? totalCost, String? address, double? pinLat, double? pinLng,
-    bool? autoApprove,
+    String? mapLink, bool? autoApprove,
   }) =>
       Game(
         id: id ?? this.id,
@@ -77,6 +79,7 @@ class Game {
         address: address ?? this.address,
         pinLat: pinLat ?? this.pinLat,
         pinLng: pinLng ?? this.pinLng,
+        mapLink: mapLink ?? this.mapLink,
         autoApprove: autoApprove ?? this.autoApprove,
       );
 
@@ -87,7 +90,8 @@ class Game {
         'hostId': hostId, 'playerIds': playerIds, 'vibe': vibe,
         'court': court, 'weather': weather, 'hot': hot,
         'totalCost': totalCost, 'address': address,
-        'pinLat': pinLat, 'pinLng': pinLng, 'autoApprove': autoApprove,
+        'pinLat': pinLat, 'pinLng': pinLng,
+        'mapLink': mapLink, 'autoApprove': autoApprove,
       };
 
   factory Game.fromMap(Map<String, dynamic> m) => Game(
@@ -112,6 +116,7 @@ class Game {
         address: m['address'],
         pinLat: (m['pinLat'] as num?)?.toDouble(),
         pinLng: (m['pinLng'] as num?)?.toDouble(),
+        mapLink: m['mapLink'] as String?,
         autoApprove: m['autoApprove'] ?? false,
       );
 }

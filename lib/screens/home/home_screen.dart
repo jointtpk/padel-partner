@@ -314,6 +314,13 @@ class _UpcomingSection extends StatelessWidget {
   }
 
   List<_UpcomingItem> _buildUpcoming(AppController store) {
+    // Touch the reactive lists explicitly so the enclosing Obx
+    // re-runs whenever bookings or hostedGames change.
+    // ignore: unused_local_variable
+    final bookingsLen = store.bookings.length;
+    // ignore: unused_local_variable
+    final hostedLen = store.hostedGames.length;
+
     final items = <_UpcomingItem>[];
     for (final b in store.bookings) {
       final g = kGames.firstWhereOrNull((g) => g.id == b.gameId) ??

@@ -60,27 +60,21 @@ class PPLogo extends StatelessWidget {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         tile,
         SizedBox(width: size * 0.28),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('padel', style: AppFonts.display(size * 0.72, color: fg, letterSpacing: -0.03 * size * 0.72)),
-            Text.rich(
+        Text.rich(
+          TextSpan(
+            text: 'padel partner',
+            style: AppFonts.display(size * 0.72, color: fg, letterSpacing: -0.03 * size * 0.72),
+            children: [
               TextSpan(
-                text: 'partner',
-                style: AppFonts.display(size * 0.72, color: fg, letterSpacing: -0.03 * size * 0.72),
-                children: [
-                  TextSpan(
-                    text: '.',
-                    style: AppFonts.display(size * 0.72, color: AppColors.ball, letterSpacing: 0),
-                  ),
-                ],
+                text: '.',
+                style: AppFonts.display(size * 0.72, color: AppColors.ball, letterSpacing: 0),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

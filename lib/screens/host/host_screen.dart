@@ -21,6 +21,7 @@ class HostController extends GetxController {
   final courtType  = 'Indoor'.obs; // Indoor | Outdoor
   final clubCtrl   = TextEditingController();
   final courtCtrl  = TextEditingController();
+  final mapLinkCtrl = TextEditingController();
   final pin        = Rx<LatLng?>(null);
 
   // Step 2 – Time
@@ -72,6 +73,7 @@ class HostController extends GetxController {
   void onClose() {
     clubCtrl.dispose();
     courtCtrl.dispose();
+    mapLinkCtrl.dispose();
     totalCtrl.dispose();
     super.onClose();
   }
@@ -107,6 +109,7 @@ class HostController extends GetxController {
       autoApprove: autoApprove.value,
       pinLat: pin.value?.latitude,
       pinLng: pin.value?.longitude,
+      mapLink: mapLinkCtrl.text.trim().isEmpty ? null : mapLinkCtrl.text.trim(),
     );
 
     store.addHostedGame(game);
@@ -354,6 +357,16 @@ class _Step1Court extends StatelessWidget {
               style: AppFonts.mono(10, color: Colors.white.withOpacity(0.45), letterSpacing: 0.2),
             );
           }),
+
+          const SizedBox(height: 14),
+          _SectionLabel('Or paste a Google Maps link (optional)'),
+          const SizedBox(height: 8),
+          _TextInput(
+            controller: ctrl.mapLinkCtrl,
+            hint: 'https://maps.app.goo.gl/...',
+            keyboardType: TextInputType.url,
+            onChanged: (_) {},
+          ),
         ],
       ),
     );

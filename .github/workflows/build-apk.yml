@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch: # lets you trigger manually from GitHub UI
 
+env:
+  # Opt the v4 actions (checkout, setup-java, upload-artifact) into Node.js 24
+  # so we don't trip the Node 20 deprecation warning.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     runs-on: ubuntu-latest

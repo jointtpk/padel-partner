@@ -86,7 +86,7 @@ class _CourtAd extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Book a court in seconds', style: AppFonts.display(13, color: Colors.white)),
+                Text('Book a spot in seconds', style: AppFonts.display(13, color: Colors.white)),
                 Text('Padel Up Karachi · from Rs 2,400/hr', style: AppFonts.body(11, color: Colors.white.withOpacity(0.65))),
               ],
             ),

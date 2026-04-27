@@ -249,37 +249,42 @@ class _FilterRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Obx(() => ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
-              itemCount: values.length,
-              itemBuilder: (_, i) {
-                final active = selected.value == values[i];
-                return GestureDetector(
-                  onTap: () => selected.value = values[i],
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.ball : Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(kBorderRadiusPill),
-                      border: Border.all(
-                        color: active ? AppColors.ball : Colors.white.withOpacity(0.14),
+            child: Obx(() {
+              // Pull the reactive value into a local so Obx subscribes here
+              // instead of inside the deferred itemBuilder closure.
+              final sel = selected.value;
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemCount: values.length,
+                itemBuilder: (_, i) {
+                  final active = sel == values[i];
+                  return GestureDetector(
+                    onTap: () => selected.value = values[i],
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: active ? AppColors.ball : Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(kBorderRadiusPill),
+                        border: Border.all(
+                          color: active ? AppColors.ball : Colors.white.withOpacity(0.14),
+                        ),
+                      ),
+                      child: Text(
+                        labels[i],
+                        style: AppFonts.body(
+                          11,
+                          color: active ? AppColors.ink : Colors.white.withOpacity(0.75),
+                          weight: active ? FontWeight.w700 : FontWeight.w400,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      labels[i],
-                      style: AppFonts.body(
-                        11,
-                        color: active ? AppColors.ink : Colors.white.withOpacity(0.75),
-                        weight: active ? FontWeight.w700 : FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            )),
+                  );
+                },
+              );
+            }),
           ),
         ],
       ),
