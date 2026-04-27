@@ -135,30 +135,28 @@ class HostScreen extends StatelessWidget {
         children: [
           _Header(ctrl: ctrl),
           Expanded(
-            child: Obx(() => _stepBody(ctrl)),
+            child: Obx(() {
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SlideTransition(
+                    position: Tween<Offset>(begin: const Offset(0.06, 0), end: Offset.zero).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: switch (ctrl.step.value) {
+                  2 => _Step2Time(ctrl: ctrl, key: const ValueKey(2)),
+                  3 => _Step3Vibe(ctrl: ctrl, key: const ValueKey(3)),
+                  4 => _Step4Review(ctrl: ctrl, key: const ValueKey(4)),
+                  _ => _Step1Court(ctrl: ctrl, key: const ValueKey(1)),
+                },
+              );
+            }),
           ),
           _CtaBar(ctrl: ctrl),
         ],
       ),
-    );
-  }
-
-  Widget _stepBody(HostController ctrl) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0.06, 0), end: Offset.zero).animate(anim),
-          child: child,
-        ),
-      ),
-      child: switch (ctrl.step.value) {
-        2 => _Step2Time(ctrl: ctrl, key: const ValueKey(2)),
-        3 => _Step3Vibe(ctrl: ctrl, key: const ValueKey(3)),
-        4 => _Step4Review(ctrl: ctrl, key: const ValueKey(4)),
-        _ => _Step1Court(ctrl: ctrl, key: const ValueKey(1)),
-      },
     );
   }
 }

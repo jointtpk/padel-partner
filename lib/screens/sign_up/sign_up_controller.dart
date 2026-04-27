@@ -10,6 +10,7 @@ class SignUpController extends GetxController {
   // ── Step 1 form ───────────────────────────────────────────────────────────
   final nameController    = TextEditingController();
   final phoneController   = TextEditingController();
+  final phoneText         = ''.obs;
   final emailController   = TextEditingController();
   final dob               = Rx<DateTime?>(null);
 
@@ -19,6 +20,7 @@ class SignUpController extends GetxController {
   // ── Step 3 profile ────────────────────────────────────────────────────────
   final usernameController = TextEditingController();
   final bioController      = TextEditingController();
+  final bioText            = ''.obs;
   final photoPath          = Rx<String?>(null);
 
   // ── Step 4 tags ───────────────────────────────────────────────────────────
@@ -82,6 +84,15 @@ class SignUpController extends GetxController {
     } else {
       tags[key] = value;
     }
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    phoneText.value = phoneController.text;
+    bioText.value = bioController.text;
+    phoneController.addListener(() => phoneText.value = phoneController.text);
+    bioController.addListener(() => bioText.value = bioController.text);
   }
 
   @override

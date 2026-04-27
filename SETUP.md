@@ -27,14 +27,14 @@ flutter run
 7. Install FlutterFire CLI and regenerate options:
    ```bash
    dart pub global activate flutterfire_cli
-   flutterfire configure --project=YOUR_PROJECT_ID
+   flutterfire configure --project=padelpartner-74b7d
    ```
 8. In `lib/main.dart`, uncomment:
    ```dart
    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
    Get.put(AuthController(), permanent: true);
    ```
-
+AdrTqXF8-CYYskrob-aM71_aHCoLs_Vgez4NYHhDBXuTsFoYIGXAHlDVPVFDNLNoKvCZM_IJmsBzJt_z_bz_Z3f4hqTscETEktkgnZWr39qo5eE0yQvNQpAcP3LxsOkX5-nhhTW3lyN-LRq8sQ7-aWkf
 ---
 
 ## Google Maps setup (host pin picker)
@@ -83,5 +83,5 @@ apply plugin: 'com.google.gms.google-services'
 
 ## Screens built so far
 - [x] Sign Up (4-step: info → OTP → profile → smart tags)
-- [ ] Home (next response)
-- [ ] Browse, Detail, Host, Requests, Join, Inbox, Chat, Friends, Profile, Subscription, Match Finished
+- [x] Home (next response)
+- [x] Browse, Detail, Host, Requests, Join, Inbox, Chat, Friends, Profile, Subscription, Match Finished

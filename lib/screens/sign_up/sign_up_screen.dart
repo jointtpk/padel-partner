@@ -64,7 +64,15 @@ class SignUpScreen extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(20, 18, 20, 140),
-                    child: Obx(() => _buildStep(ctrl, context)),
+                    child: Obx(() {
+                      return switch (ctrl.step.value) {
+                        1 => _StepInfo(ctrl: ctrl),
+                        2 => _StepOtp(ctrl: ctrl),
+                        3 => _StepProfile(ctrl: ctrl),
+                        4 => _StepTags(ctrl: ctrl),
+                        _ => const SizedBox.shrink(),
+                      };
+                    }),
                   ),
                 ),
               ],
@@ -78,16 +86,6 @@ class SignUpScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Widget _buildStep(SignUpController ctrl, BuildContext context) {
-    return switch (ctrl.step.value) {
-      1 => _StepInfo(ctrl: ctrl),
-      2 => _StepOtp(ctrl: ctrl),
-      3 => _StepProfile(ctrl: ctrl),
-      4 => _StepTags(ctrl: ctrl),
-      _ => const SizedBox.shrink(),
-    };
   }
 }
 
@@ -389,12 +387,13 @@ class _StepOtp extends StatelessWidget {
             style: AppFonts.body(13, color: Colors.white.withOpacity(0.70)),
             children: [
               TextSpan(
-                text: '+92 ${ctrl.phoneController.text.isNotEmpty ? ctrl.phoneController.text : '300 1234567'}',
+                text: '+92 ${ctrl.phoneText.value.isNotEmpty ? ctrl.phoneText.value : '300 1234567'}',
                 style: AppFonts.body(13, color: Colors.white, weight: FontWeight.w700),
               ),
             ],
           ),
         )),
+
         const SizedBox(height: 28),
 
         Center(
@@ -568,7 +567,7 @@ class _StepProfile extends StatelessWidget {
           children: [
             _FieldLabel(label: 'BIO', optional: true),
             Obx(() => Text(
-              '${ctrl.bioController.text.length}/100',
+              '${ctrl.bioText.value.length}/100',
               style: AppFonts.mono(10, color: Colors.white.withOpacity(0.50)),
             )),
           ],
