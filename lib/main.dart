@@ -49,9 +49,15 @@ void main() async {
   if (saved != null) kMe = saved;
 
   // ── Cross-device sync identity ────────────────────────────────────────────
-  // Generated once per install; used only by Firestore-side ops (game
-  // ownership, request authorship). Independent from kMe.id, which stays
-  // 'me' so existing local checks are unaffected.
+  // Pin the IdentityService UID to the saved user's email so the same
+  // login resolves to the same Firestore identity across devices /
+  // sessions. Without this, anonymous Firebase auth would mint a fresh
+  // uid on every sign-in and friend requests / hosted games would
+  // dangle off the previous identity.
+  if (saved?.email != null) {
+    final pinned = await UserStorage.getUidForEmail(saved!.email!);
+    if (pinned != null) IdentityService.instance.setOverrideUid(pinned);
+  }
   await IdentityService.instance.uid();
 
   // ── Firebase Auth (anonymous) for verifiable sync identity ────────────────

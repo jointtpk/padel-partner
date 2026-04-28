@@ -22,13 +22,21 @@ class IdentityService {
   static const _kKey = 'sync_uid_v1';
 
   String? _cachedUuid;
+  String? _overrideUid;
 
-  /// Returns the best available identity. Prefers Firebase UID — kicks off
-  /// anonymous sign-in if needed, with a short timeout so we don't block
-  /// indefinitely on a flaky network. Falls back to the persisted per-install
-  /// UUID otherwise.
+  /// Pins this session to a specific sync UID — used by the sign-in
+  /// flow so that signing in with a known email always resolves to the
+  /// same uid. Pass `null` on sign-out to clear the pin.
+  void setOverrideUid(String? uid) {
+    _overrideUid = (uid != null && uid.isNotEmpty) ? uid : null;
+  }
+
+  /// Returns the best available identity. Resolution order:
+  ///   1. Override (set after sign-in for the current email)
+  ///   2. Firebase UID (anonymous, signed in)
+  ///   3. Per-install UUID stored in SharedPreferences
   Future<String?> uid() async {
-    // Already signed in?
+    if (_overrideUid != null) return _overrideUid;
     final cached = AuthService.instance.uid;
     if (cached != null && cached.isNotEmpty) return cached;
     // Try anonymous sign-in with a 3s budget. Anything longer and we'd
@@ -41,9 +49,9 @@ class IdentityService {
   }
 
   /// Synchronous accessor for code paths that have already awaited [uid] at
-  /// least once during this session. Returns the Firebase UID if signed in,
-  /// otherwise the cached UUID, otherwise null.
+  /// least once during this session. Same precedence as [uid].
   String? get cached {
+    if (_overrideUid != null) return _overrideUid;
     final firebase = AuthService.instance.uid;
     if (firebase != null && firebase.isNotEmpty) return firebase;
     return _cachedUuid;

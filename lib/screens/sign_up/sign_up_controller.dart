@@ -8,6 +8,7 @@ import '../../core/mock_data.dart';
 import '../../core/models/player.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/email_otp_service.dart';
+import '../../core/services/identity_service.dart';
 import '../../core/services/user_storage.dart';
 
 class SignUpController extends GetxController {
@@ -94,9 +95,20 @@ class SignUpController extends GetxController {
       // Mint a Firebase UID so Firestore writes are server-verifiable.
       // Best-effort — failure here doesn't block sign-up; the app falls
       // back to the per-install UUID for sync.
-      unawaited(AuthService.instance.ensureSignedIn());
+      unawaited(_finishSignUp());
       Get.offAllNamed(Routes.home);
     }
+  }
+
+  Future<void> _finishSignUp() async {
+    final email = emailController.text.trim();
+    if (email.isNotEmpty) {
+      final pinned = await UserStorage.getUidForEmail(email);
+      final uid = pinned ?? await _mintUidForEmail(email);
+      IdentityService.instance.setOverrideUid(uid);
+    }
+    await AuthService.instance.ensureSignedIn();
+    AppController.to.bootstrapPerAccountStreams();
   }
 
   Future<void> _sendCode() async {
@@ -154,7 +166,13 @@ class SignUpController extends GetxController {
     await UserStorage.save(p);
     kMe = p;
     AppController.to.currentUser.value = p;
-    unawaited(AuthService.instance.ensureSignedIn());
+    if (p.email != null) {
+      final pinned = await UserStorage.getUidForEmail(p.email!);
+      final uid = pinned ?? await _mintUidForEmail(p.email!);
+      IdentityService.instance.setOverrideUid(uid);
+    }
+    await AuthService.instance.ensureSignedIn();
+    AppController.to.bootstrapPerAccountStreams();
     Get.offAllNamed(Routes.home);
     Get.snackbar(
       'Welcome back',
@@ -164,6 +182,13 @@ class SignUpController extends GetxController {
       borderRadius: 12,
       duration: const Duration(seconds: 2),
     );
+  }
+
+  Future<String> _mintUidForEmail(String email) async {
+    final id = 'u_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}'
+        '_${email.hashCode.toRadixString(36)}';
+    await UserStorage.setUidForEmail(email, id);
+    return id;
   }
 
   Future<void> resendCode() async {

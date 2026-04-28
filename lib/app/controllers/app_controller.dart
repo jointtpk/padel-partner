@@ -109,6 +109,19 @@ class AppController extends GetxController {
     await UserStorage.clear();
     await StateStorage.clearAll();
     await AuthService.instance.signOut();
+    IdentityService.instance.setOverrideUid(null);
+    // Tear down per-account subscriptions so the next account's
+    // streams don't merge with the previous one's data.
+    await _friendsSub?.cancel();
+    _friendsSub = null;
+    for (final s in _gameChatSubs.values) {
+      await s.cancel();
+    }
+    _gameChatSubs.clear();
+    for (final s in _dmChatSubs.values) {
+      await s.cancel();
+    }
+    _dmChatSubs.clear();
     bookings.clear();
     friends.clear();
     requests.clear();
@@ -172,6 +185,24 @@ class AppController extends GetxController {
     // Persist on every change so we never lose state if the app is killed.
     ever<List<Game>>(hostedGames, (g) => StateStorage.saveHostedGames(g));
     ever<List<Booking>>(bookings, (b) => StateStorage.saveBookings(b));
+    // Auto-subscribe to chat for every hosted game and every confirmed
+    // booking so the inbox unread badge stays accurate even before the
+    // user opens the chat screen.
+    ever<List<Game>>(hostedGames, (games) {
+      for (final g in games) _ensureGameChatSub(g.id);
+    });
+    ever<List<Booking>>(bookings, (bs) {
+      for (final b in bs) {
+        if (b.status == 'confirmed' || b.status == 'hosting') {
+          _ensureGameChatSub(b.gameId);
+        }
+      }
+    });
+    ever<List<FriendEntry>>(friends, (entries) {
+      for (final f in entries) {
+        if (f.status == 'friends') _ensureDmChatSub(f.userId);
+      }
+    });
     // Mirror Pro subscription state onto the current user's player profile
     // so the gold verified tick is reflected wherever Player is rendered
     // (own profile, host card, request rows on other devices via the
@@ -179,10 +210,28 @@ class AppController extends GetxController {
     ever<Subscription>(subscription, _syncProBadge);
     // Apply the initial value too in case sub starts as Pro (e.g. restored).
     _syncProBadge(subscription.value);
+    // Friend list / friend requests feed. Resolves identity first so the
+    // subscription is keyed by a real uid; on slow networks falls back
+    // to the cached value once the timeout in IdentityService expires.
+    () async {
+      await IdentityService.instance.uid();
+      _ensureFriendsSub();
+    }();
     // Live Firestore games feed (shared by home + browse).
-    _remoteGamesSub = GameSyncService.instance
-        .streamAllGames()
-        .listen((games) => remoteGames.assignAll(games));
+    _remoteGamesSub = GameSyncService.instance.streamAllGames().listen((games) {
+      // Register any joiner snapshots embedded in remote games so the
+      // line-up picker / court diagram can resolve them by uid on every
+      // device — not just the host's.
+      for (final g in games) {
+        for (final entry in g.playerSnapshots.entries) {
+          registerRemotePlayer(entry.value.copyWith(id: entry.key));
+        }
+        if (g.hostSnapshot != null && g.hostUid != null) {
+          registerRemotePlayer(g.hostSnapshot!.copyWith(id: g.hostUid!));
+        }
+      }
+      remoteGames.assignAll(games);
+    });
   }
 
   void _syncProBadge(Subscription sub) {
@@ -196,7 +245,17 @@ class AppController extends GetxController {
 
   Future<void> _hydrate() async {
     final games = await StateStorage.loadHostedGames();
-    if (games.isNotEmpty) hostedGames.addAll(games);
+    if (games.isNotEmpty) {
+      hostedGames.addAll(games);
+      // Re-register persisted joiner snapshots into kRemotePlayers so the
+      // line-up picker / court diagram can resolve them by uid even
+      // before the Firestore stream reconnects.
+      for (final g in games) {
+        for (final entry in g.playerSnapshots.entries) {
+          registerRemotePlayer(entry.value.copyWith(id: entry.key));
+        }
+      }
+    }
     final saved = await StateStorage.loadBookings();
     if (saved.isNotEmpty) {
       // Avoid duplicating any bookings already loaded from kInitialBookings.
@@ -337,19 +396,105 @@ class AppController extends GetxController {
     final cur = getFriendStatus(uid);
     if (cur == 'none') {
       friends.add(FriendEntry(userId: uid, status: 'pending_out'));
+      _pushFriendRequest(uid);
     } else if (cur == 'pending_in') {
+      // Accepting an inbound request — flip locally and mirror remote.
       final i = friends.indexWhere((f) => f.userId == uid);
       if (i >= 0) friends[i] = friends[i].copyWith(status: 'friends');
+      _pushFriendAccept(uid);
     }
   }
 
   void approveFriend(String uid) {
     final i = friends.indexWhere((f) => f.userId == uid);
     if (i >= 0) friends[i] = friends[i].copyWith(status: 'friends');
+    _pushFriendAccept(uid);
+  }
+
+  void removeFriend(String uid) {
+    friends.removeWhere((f) => f.userId == uid);
+    final myUid = IdentityService.instance.cached;
+    if (myUid != null) {
+      GameSyncService.instance.removeFriend(myUid: myUid, theirUid: uid);
+    }
   }
 
   int get pendingFriendRequests =>
       friends.where((f) => f.status == 'pending_in').length;
+
+  void _pushFriendRequest(String theirUid) {
+    final myUid = IdentityService.instance.cached;
+    if (myUid == null) return;
+    GameSyncService.instance.sendFriendRequest(
+      myUid: myUid,
+      mySnapshot: currentUser.value,
+      theirUid: theirUid,
+      theirSnapshot: kRemotePlayers[theirUid],
+    );
+  }
+
+  void _pushFriendAccept(String theirUid) {
+    final myUid = IdentityService.instance.cached;
+    if (myUid == null) return;
+    GameSyncService.instance.acceptFriendRequest(
+      myUid: myUid,
+      mySnapshot: currentUser.value,
+      theirUid: theirUid,
+    );
+  }
+
+  /// Active subscription to my friend list in Firestore.
+  StreamSubscription<List<RemoteFriendEntry>>? _friendsSub;
+
+  /// Re-subscribes to per-account streams after a fresh sign-in. The
+  /// sign-out path tears them down so the new account starts clean —
+  /// without this hook the friend list (and chat) would silently stay
+  /// dark after sign-in until the next app launch.
+  void bootstrapPerAccountStreams() {
+    _ensureFriendsSub();
+    for (final g in hostedGames) {
+      _ensureGameChatSub(g.id);
+    }
+    for (final b in bookings) {
+      if (b.status == 'confirmed' || b.status == 'hosting') {
+        _ensureGameChatSub(b.gameId);
+      }
+    }
+    for (final f in friends) {
+      if (f.status == 'friends') _ensureDmChatSub(f.userId);
+    }
+  }
+
+  /// Subscribes (idempotently) to `users/{myUid}/friends`. Called from
+  /// `onInit` once the identity is resolved so friend requests sent
+  /// from another device land in the local list automatically.
+  void _ensureFriendsSub() {
+    if (_friendsSub != null) return;
+    final myUid = IdentityService.instance.cached;
+    if (myUid == null) return;
+    _friendsSub = GameSyncService.instance
+        .streamMyFriends(myUid)
+        .listen(_mergeRemoteFriends,
+            onError: (e) => debugPrint('AppController friends sub error: $e'));
+  }
+
+  void _mergeRemoteFriends(List<RemoteFriendEntry> remote) {
+    // Stash any embedded profile snapshots so `playerById(theirUid)`
+    // resolves them in the friends UI.
+    for (final r in remote) {
+      final p = r.otherSnapshot;
+      if (p != null) registerRemotePlayer(p.copyWith(id: r.otherUid));
+    }
+    // Replace the local list with the remote authority while keeping
+    // any legacy local-only entries (those with no Firestore mirror).
+    final remoteUids = remote.map((r) => r.otherUid).toSet();
+    final localOnly = friends.where((f) => !remoteUids.contains(f.userId));
+    final next = <FriendEntry>[
+      ...localOnly,
+      ...remote.map((r) => FriendEntry(userId: r.otherUid, status: r.status)),
+    ];
+    friends.assignAll(next);
+  }
 
   // ─── Bookings ─────────────────────────────────────────────────────────────
   String getBookingStatus(String gameId) =>
@@ -386,9 +531,17 @@ class AppController extends GetxController {
     if (gi >= 0) {
       final g = hostedGames[gi];
       if (!g.playerIds.contains(uid)) {
+        // Stamp the joiner's snapshot onto the game so the line-up
+        // survives an app restart. kRemotePlayers is in-memory; without
+        // this, the host would lose the joiner's name/avatar after a
+        // relaunch even though their uid is still in playerIds.
+        final snapshot = kRemotePlayers[uid];
+        final mergedSnapshots = Map<String, Player>.from(g.playerSnapshots);
+        if (snapshot != null) mergedSnapshots[uid] = snapshot;
         final next = g.copyWith(
           playerIds: [...g.playerIds, uid],
           spots: (g.spots - 1).clamp(0, g.total),
+          playerSnapshots: mergedSnapshots,
         );
         hostedGames[gi] = next;
         GameSyncService.instance.publishGame(next);
@@ -415,18 +568,81 @@ class AppController extends GetxController {
   }
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
+
+  /// Active Firestore listeners for cross-device chat threads, keyed by
+  /// the local map key (gameId for game chats, friend uid for DMs).
+  final _gameChatSubs = <String, StreamSubscription>{};
+  final _dmChatSubs = <String, StreamSubscription>{};
+
   void sendGameMessage(String gameId, String text) {
+    final msg = ChatMessage(from: 'me', text: text, t: _nowTime());
     final list = List<ChatMessage>.from(gameChats[gameId] ?? []);
-    list.add(ChatMessage(from: 'me', text: text, t: _nowTime()));
+    list.add(msg);
     gameChats[gameId] = list;
     gameChats.refresh();
+    final myUid = IdentityService.instance.cached;
+    if (myUid != null) {
+      GameSyncService.instance.sendGameMessage(
+        gameId: gameId,
+        message: msg,
+        fromUid: myUid,
+      );
+    }
+    _ensureGameChatSub(gameId);
   }
 
   void sendFriendMessage(String uid, String text) {
+    final msg = ChatMessage(from: 'me', text: text, t: _nowTime());
     final list = List<ChatMessage>.from(friendChats[uid] ?? []);
-    list.add(ChatMessage(from: 'me', text: text, t: _nowTime()));
+    list.add(msg);
     friendChats[uid] = list;
     friendChats.refresh();
+    final myUid = IdentityService.instance.cached;
+    if (myUid != null) {
+      final convoId = GameSyncService.dmConversationId(myUid, uid);
+      GameSyncService.instance.sendDmMessage(
+        conversationId: convoId,
+        message: msg,
+        fromUid: myUid,
+      );
+    }
+    _ensureDmChatSub(uid);
+  }
+
+  /// Subscribes to a game's chat thread once. Subsequent calls are
+  /// no-ops. Replaces the local `gameChats[gameId]` with the server
+  /// stream's authoritative ordering on each emission.
+  void _ensureGameChatSub(String gameId) {
+    if (_gameChatSubs.containsKey(gameId)) return;
+    final myUid = IdentityService.instance.cached;
+    if (myUid == null) return;
+    _gameChatSubs[gameId] = GameSyncService.instance
+        .streamGameMessages(gameId: gameId, myUid: myUid)
+        .listen((msgs) {
+      gameChats[gameId] = msgs;
+      gameChats.refresh();
+    }, onError: (e) => debugPrint('AppController game chat sub error: $e'));
+  }
+
+  void _ensureDmChatSub(String friendUid) {
+    if (_dmChatSubs.containsKey(friendUid)) return;
+    final myUid = IdentityService.instance.cached;
+    if (myUid == null) return;
+    final convoId = GameSyncService.dmConversationId(myUid, friendUid);
+    _dmChatSubs[friendUid] = GameSyncService.instance
+        .streamDmMessages(conversationId: convoId, myUid: myUid)
+        .listen((msgs) {
+      friendChats[friendUid] = msgs;
+      friendChats.refresh();
+    }, onError: (e) => debugPrint('AppController dm chat sub error: $e'));
+  }
+
+  /// Public helper for screens to bootstrap chat sync — `ChatScreen`
+  /// calls this on open so it always pulls from Firestore even if the
+  /// local copy is empty (e.g. fresh install).
+  void ensureChatSubscribed({String? gameId, String? friendUid}) {
+    if (gameId != null) _ensureGameChatSub(gameId);
+    if (friendUid != null) _ensureDmChatSub(friendUid);
   }
 
   // ─── Host games ───────────────────────────────────────────────────────────

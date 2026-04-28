@@ -5,7 +5,9 @@ import 'package:pinput/pinput.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart';
 import '../../core/mock_data.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/email_otp_service.dart';
+import '../../core/services/identity_service.dart';
 import '../../core/services/user_storage.dart';
 import '../../core/theme/tokens.dart';
 
@@ -101,7 +103,25 @@ class _SignInScreenState extends State<SignInScreen> {
     await UserStorage.save(existing);
     kMe = existing;
     AppController.to.currentUser.value = existing;
+    // Pin the IdentityService UID to this email's stored uid so the
+    // user picks back up on the same identity (same hosted games,
+    // same friend requests) regardless of device or anonymous-auth
+    // session churn. Generates one if missing on this device.
+    final pinned = await UserStorage.getUidForEmail(email);
+    final uid = pinned ?? await _mintUidForEmail(email);
+    IdentityService.instance.setOverrideUid(uid);
+    // Re-subscribe to per-account streams (friends list, etc) — they
+    // were torn down on sign-out.
+    await AuthService.instance.ensureSignedIn();
+    AppController.to.bootstrapPerAccountStreams();
     Get.offAllNamed(Routes.home);
+  }
+
+  Future<String> _mintUidForEmail(String email) async {
+    final id = 'u_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}'
+        '_${email.hashCode.toRadixString(36)}';
+    await UserStorage.setUidForEmail(email, id);
+    return id;
   }
 
   @override

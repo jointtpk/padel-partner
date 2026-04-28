@@ -27,6 +27,7 @@ class Game {
     this.autoApprove = false,
     this.hostUid,
     this.hostSnapshot,
+    this.playerSnapshots = const {},
   });
 
   final String id;
@@ -65,6 +66,12 @@ class Game {
   /// own local kMe).
   final Player? hostSnapshot;
 
+  /// uid → Player snapshot for every approved joiner. Stamped on the
+  /// game when the host approves a request so the lineup survives an
+  /// app restart (kRemotePlayers is in-memory only) and so other devices
+  /// can render the line-up's names / avatars without a user lookup.
+  final Map<String, Player> playerSnapshots;
+
   Game copyWith({
     String? id, String? club, String? area, String? when, String? time,
     String? duration, String? level, String? levelKey, int? price,
@@ -72,6 +79,7 @@ class Game {
     String? vibe, String? court, String? weather, bool? hot,
     int? totalCost, String? address, double? pinLat, double? pinLng,
     String? mapLink, bool? autoApprove, String? hostUid, Player? hostSnapshot,
+    Map<String, Player>? playerSnapshots,
   }) =>
       Game(
         id: id ?? this.id,
@@ -99,6 +107,7 @@ class Game {
         autoApprove: autoApprove ?? this.autoApprove,
         hostUid: hostUid ?? this.hostUid,
         hostSnapshot: hostSnapshot ?? this.hostSnapshot,
+        playerSnapshots: playerSnapshots ?? this.playerSnapshots,
       );
 
   Map<String, dynamic> toMap() => {
@@ -112,6 +121,8 @@ class Game {
         'mapLink': mapLink, 'autoApprove': autoApprove,
         'hostUid': hostUid,
         'hostSnapshot': hostSnapshot?.toMap(),
+        'playerSnapshots':
+            playerSnapshots.map((k, v) => MapEntry(k, v.toMap())),
       };
 
   factory Game.fromMap(Map<String, dynamic> m) => Game(
@@ -142,5 +153,19 @@ class Game {
         hostSnapshot: m['hostSnapshot'] is Map
             ? Player.fromMap(Map<String, dynamic>.from(m['hostSnapshot'] as Map))
             : null,
+        playerSnapshots: m['playerSnapshots'] is Map
+            ? Map<String, Player>.fromEntries(
+                (m['playerSnapshots'] as Map).entries.map((e) {
+                  try {
+                    return MapEntry(
+                      e.key.toString(),
+                      Player.fromMap(Map<String, dynamic>.from(e.value as Map)),
+                    );
+                  } catch (_) {
+                    return null;
+                  }
+                }).whereType<MapEntry<String, Player>>(),
+              )
+            : const {},
       );
 }

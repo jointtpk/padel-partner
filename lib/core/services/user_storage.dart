@@ -15,6 +15,7 @@ class UserStorage {
 
   static const _kUserKey     = 'current_user_v1';
   static const _kRegistryKey = 'user_registry_v1';
+  static const _kEmailUidsKey = 'email_uids_v1';
 
   // ── Current user ──────────────────────────────────────────────────────────
 
@@ -86,6 +87,38 @@ class UserStorage {
     await sp.setString(_kRegistryKey, jsonEncode(m));
   }
 
+  // ── Email → sync UID mapping ──────────────────────────────────────────────
+  // Each email gets its own persistent IdentityService UID so that
+  // signing back in with the same email recovers the same cross-device
+  // identity (host of the same games, recipient of the same friend
+  // requests). Without this, anonymous Firebase auth would mint a fresh
+  // UID on every sign-in and friendship/game state would dangle.
+
+  static Future<String?> getUidForEmail(String email) async {
+    final sp = await SharedPreferences.getInstance();
+    final raw = sp.getString(_kEmailUidsKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      return m[email.trim().toLowerCase()] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setUidForEmail(String email, String uid) async {
+    final sp = await SharedPreferences.getInstance();
+    final raw = sp.getString(_kEmailUidsKey);
+    final m = <String, dynamic>{};
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        m.addAll(jsonDecode(raw) as Map<String, dynamic>);
+      } catch (_) {/* ignore corrupt entry */}
+    }
+    m[email.trim().toLowerCase()] = uid;
+    await sp.setString(_kEmailUidsKey, jsonEncode(m));
+  }
+
   /// Seeds the two demo accounts the team uses for testing the host /
   /// player split. Idempotent — only inserts entries that don't already
   /// exist, so real edits to those profiles won't be clobbered on every
@@ -137,5 +170,17 @@ class UserStorage {
     }
 
     if (changed) await _saveRegistry(reg);
+
+    // Stable, well-known sync UIDs for the demo accounts. Hard-coding
+    // them means any device that has run `ensureSeedUsers` resolves the
+    // same uid for these emails — friend requests / games sent to
+    // `manooazad@gmail.com` always land at the same Firestore doc no
+    // matter which device generated them.
+    if ((await getUidForEmail('manooazad@gmail.com')) == null) {
+      await setUidForEmail('manooazad@gmail.com', 'demo_manoo_uid');
+    }
+    if ((await getUidForEmail('taqiratnani@hotmail.com')) == null) {
+      await setUidForEmail('taqiratnani@hotmail.com', 'demo_taqi_uid');
+    }
   }
 }

@@ -3,9 +3,9 @@ import 'package:get/get.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/mock_data.dart';
 import '../../core/models/player.dart';
-import '../../core/models/game.dart';
 import '../../core/widgets/avatar_widget.dart';
 import '../../core/widgets/chip_widget.dart';
+import '../../core/widgets/floating_nav.dart';
 import '../../core/widgets/game_card.dart';
 import '../../core/widgets/verified_tick.dart';
 import '../../app/controllers/app_controller.dart';
@@ -44,33 +44,59 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      body: Obx(() {
-        // If a player was passed as argument, show their profile;
-        // else show the current logged-in user (reactive).
-        final player = passedPlayer ?? store.currentUser.value;
-        final isOwnProfile = player.id == store.currentUser.value.id;
+      body: Stack(
+        children: [
+          Obx(() {
+            // If a player was passed as argument, show their profile;
+            // else show the current logged-in user (reactive).
+            final player = passedPlayer ?? store.currentUser.value;
+            final isOwnProfile = player.id == store.currentUser.value.id;
 
-        return NestedScrollView(
-          headerSliverBuilder: (_, __) => [
-            _ProfileHeaderSliver(player: player, isOwn: isOwnProfile, store: store),
-          ],
-          body: Column(
-            children: [
-              _TabBar(tab: _tab),
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: [
-                    _StatsTab(player: player),
-                    _HistoryTab(player: player, store: store),
-                    _PartnersTab(player: player, store: store),
-                  ],
-                ),
+            return NestedScrollView(
+              headerSliverBuilder: (_, __) => [
+                _ProfileHeaderSliver(player: player, isOwn: isOwnProfile, store: store),
+              ],
+              body: Column(
+                children: [
+                  _TabBar(tab: _tab),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tab,
+                      children: [
+                        _StatsTab(player: player),
+                        _HistoryTab(player: player, store: store),
+                        _PartnersTab(player: player, store: store),
+                      ],
+                    ),
+                  ),
+                  // Padding so the floating nav doesn't cover the last
+                  // row in the tab content.
+                  const SizedBox(height: 96),
+                ],
               ),
-            ],
-          ),
-        );
-      }),
+            );
+          }),
+          // Floating nav — only show on the user's own profile (when no
+          // arguments were passed). Other-user profile is a "drill-in"
+          // view and matches the back-stack navigation pattern.
+          if (passedPlayer == null)
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: FloatingNavBar(
+                active: NavTab.profile,
+                onTab: (tab) {
+                  switch (tab) {
+                    case NavTab.home:    Get.offAllNamed(Routes.home);
+                    case NavTab.browse:  Get.offAllNamed(Routes.browse);
+                    case NavTab.host:    Get.toNamed(Routes.host);
+                    case NavTab.chat:    Get.toNamed(Routes.inbox);
+                    case NavTab.profile: break;
+                  }
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

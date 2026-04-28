@@ -38,6 +38,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _type  = _args['type'] as String? ?? 'game';
     _id    = (_args['gameId'] ?? _args['userId'] ?? '') as String;
     _title = _args['title'] as String? ?? '';
+    // Subscribe to Firestore for this thread so messages from other
+    // devices arrive live. Idempotent — safe to call repeatedly.
+    if (_type == 'game') {
+      _store.ensureChatSubscribed(gameId: _id);
+    } else {
+      _store.ensureChatSubscribed(friendUid: _id);
+    }
   }
 
   @override

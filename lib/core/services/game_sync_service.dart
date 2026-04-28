@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-import '../models/booking.dart' show JoinRequest;
+import '../models/booking.dart' show ChatMessage, JoinRequest;
 import '../models/game.dart';
 import '../models/player.dart';
 import 'identity_service.dart';
@@ -245,6 +245,253 @@ class GameSyncService {
     }
   }
 
+  // ─── Chat ────────────────────────────────────────────────────────────────
+
+  /// Push a chat message into a game's thread. The local AppController
+  /// also keeps a copy in its `gameChats` map so the sender sees the
+  /// message immediately even before Firestore round-trips back.
+  Future<bool> sendGameMessage({
+    required String gameId,
+    required ChatMessage message,
+    required String fromUid,
+  }) async {
+    if (!_enabled) return false;
+    try {
+      await _firestore!
+          .collection('games')
+          .doc(gameId)
+          .collection('messages')
+          .add({
+        'fromUid': fromUid,
+        'text': message.text,
+        't': message.t,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.sendGameMessage error: $e');
+      return false;
+    }
+  }
+
+  /// Stream every message for a game's thread, oldest first. The
+  /// `fromUid` field is rewritten to `'me'` when it matches [myUid] so
+  /// the existing `ChatMessage.from == 'me'` rendering keeps working.
+  Stream<List<ChatMessage>> streamGameMessages({
+    required String gameId,
+    required String myUid,
+  }) {
+    if (!_enabled) return const Stream.empty();
+    try {
+      return _firestore!
+          .collection('games')
+          .doc(gameId)
+          .collection('messages')
+          .orderBy('createdAt')
+          .snapshots()
+          .map((snap) {
+        final out = <ChatMessage>[];
+        for (final d in snap.docs) {
+          final data = d.data();
+          final from = (data['fromUid'] as String?) ?? '';
+          out.add(ChatMessage(
+            from: from == myUid ? 'me' : from,
+            text: (data['text'] as String?) ?? '',
+            t: (data['t'] as String?) ?? '',
+          ));
+        }
+        return out;
+      }).handleError((e) {
+        debugPrint('GameSyncService.streamGameMessages error: $e');
+      });
+    } catch (e) {
+      debugPrint('GameSyncService.streamGameMessages setup error: $e');
+      return const Stream.empty();
+    }
+  }
+
+  /// Conversation id for a DM between [a] and [b] — sorted so both
+  /// parties resolve the same key regardless of who's calling.
+  static String dmConversationId(String a, String b) {
+    final sorted = [a, b]..sort();
+    return '${sorted[0]}__${sorted[1]}';
+  }
+
+  Future<bool> sendDmMessage({
+    required String conversationId,
+    required ChatMessage message,
+    required String fromUid,
+  }) async {
+    if (!_enabled) return false;
+    try {
+      await _firestore!
+          .collection('dms')
+          .doc(conversationId)
+          .collection('messages')
+          .add({
+        'fromUid': fromUid,
+        'text': message.text,
+        't': message.t,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.sendDmMessage error: $e');
+      return false;
+    }
+  }
+
+  Stream<List<ChatMessage>> streamDmMessages({
+    required String conversationId,
+    required String myUid,
+  }) {
+    if (!_enabled) return const Stream.empty();
+    try {
+      return _firestore!
+          .collection('dms')
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('createdAt')
+          .snapshots()
+          .map((snap) {
+        final out = <ChatMessage>[];
+        for (final d in snap.docs) {
+          final data = d.data();
+          final from = (data['fromUid'] as String?) ?? '';
+          out.add(ChatMessage(
+            from: from == myUid ? 'me' : from,
+            text: (data['text'] as String?) ?? '',
+            t: (data['t'] as String?) ?? '',
+          ));
+        }
+        return out;
+      }).handleError((e) {
+        debugPrint('GameSyncService.streamDmMessages error: $e');
+      });
+    } catch (e) {
+      debugPrint('GameSyncService.streamDmMessages setup error: $e');
+      return const Stream.empty();
+    }
+  }
+
+  // ─── Friend requests ─────────────────────────────────────────────────────
+  // Layout: `users/{uid}/friends/{otherUid}` — symmetric pair, one entry
+  // on each side. Sender writes their own outgoing copy + the recipient's
+  // incoming copy in a single batch so both devices light up the same
+  // moment.
+
+  Future<bool> sendFriendRequest({
+    required String myUid,
+    required Player mySnapshot,
+    required String theirUid,
+    Player? theirSnapshot,
+  }) async {
+    if (!_enabled) return false;
+    try {
+      final batch = _firestore!.batch();
+      final mineRef = _firestore!
+          .collection('users').doc(myUid)
+          .collection('friends').doc(theirUid);
+      final theirsRef = _firestore!
+          .collection('users').doc(theirUid)
+          .collection('friends').doc(myUid);
+      batch.set(mineRef, {
+        'status': 'pending_out',
+        'otherUid': theirUid,
+        'otherSnapshot': theirSnapshot?.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      batch.set(theirsRef, {
+        'status': 'pending_in',
+        'otherUid': myUid,
+        'otherSnapshot': mySnapshot.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.sendFriendRequest error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> acceptFriendRequest({
+    required String myUid,
+    required Player mySnapshot,
+    required String theirUid,
+  }) async {
+    if (!_enabled) return false;
+    try {
+      final batch = _firestore!.batch();
+      final mineRef = _firestore!
+          .collection('users').doc(myUid)
+          .collection('friends').doc(theirUid);
+      final theirsRef = _firestore!
+          .collection('users').doc(theirUid)
+          .collection('friends').doc(myUid);
+      batch.set(mineRef, {
+        'status': 'friends',
+        'otherUid': theirUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      batch.set(theirsRef, {
+        'status': 'friends',
+        'otherUid': myUid,
+        'otherSnapshot': mySnapshot.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await batch.commit();
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.acceptFriendRequest error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeFriend({
+    required String myUid,
+    required String theirUid,
+  }) async {
+    if (!_enabled) return false;
+    try {
+      final batch = _firestore!.batch();
+      batch.delete(_firestore!
+          .collection('users').doc(myUid)
+          .collection('friends').doc(theirUid));
+      batch.delete(_firestore!
+          .collection('users').doc(theirUid)
+          .collection('friends').doc(myUid));
+      await batch.commit();
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.removeFriend error: $e');
+      return false;
+    }
+  }
+
+  /// Stream of every friend entry for [myUid] — incoming requests,
+  /// outgoing requests, and confirmed friends. The other party's profile
+  /// is included as a snapshot so the recipient can render the request
+  /// without a separate user lookup.
+  Stream<List<RemoteFriendEntry>> streamMyFriends(String myUid) {
+    if (!_enabled) return const Stream.empty();
+    try {
+      return _firestore!
+          .collection('users').doc(myUid)
+          .collection('friends')
+          .snapshots()
+          .map((snap) => snap.docs
+              .map((d) => RemoteFriendEntry.fromMap(d.id, d.data()))
+              .toList())
+          .handleError((e) {
+        debugPrint('GameSyncService.streamMyFriends error: $e');
+      });
+    } catch (e) {
+      debugPrint('GameSyncService.streamMyFriends setup error: $e');
+      return const Stream.empty();
+    }
+  }
+
   /// Firestore allows nested Maps but Dart's `Map<String, dynamic>` may
   /// contain `Timestamp` and other native types that Game.fromMap doesn't
   /// know about — strip them so the model stays string/num/list/bool only.
@@ -299,4 +546,34 @@ class RemoteJoinRequest {
         when: 'just now',
         note: note,
       );
+}
+
+/// Remote friend entry as stored under `users/{me}/friends/{them}`.
+class RemoteFriendEntry {
+  const RemoteFriendEntry({
+    required this.otherUid,
+    required this.status,
+    this.otherSnapshot,
+  });
+
+  final String otherUid;
+  final String status; // 'pending_in' | 'pending_out' | 'friends'
+  final Player? otherSnapshot;
+
+  factory RemoteFriendEntry.fromMap(String docId, Map<String, dynamic> data) {
+    Player? snap;
+    final raw = data['otherSnapshot'];
+    if (raw is Map) {
+      try {
+        snap = Player.fromMap(Map<String, dynamic>.from(raw));
+      } catch (_) {
+        snap = null;
+      }
+    }
+    return RemoteFriendEntry(
+      otherUid: data['otherUid'] as String? ?? docId,
+      status: data['status'] as String? ?? 'friends',
+      otherSnapshot: snap,
+    );
+  }
 }
