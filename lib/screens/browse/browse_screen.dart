@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/mock_data.dart' show kPkAreas;
 import '../../core/models/game.dart';
 import '../../core/services/game_sync_service.dart';
 import '../../core/widgets/game_card.dart';
@@ -219,126 +220,293 @@ class _SearchHeader extends StatelessWidget {
 }
 
 // ─── Filter strip ─────────────────────────────────────────────────────────────
+//
+// One compact horizontal row of filter pills. Each pill shows the filter
+// name + currently-selected value. Tapping opens a bottom sheet with all
+// options for that filter. This replaces the older 4-row layout that took
+// too much vertical space and clipped on wider viewports (tablet / web).
 
 class _FilterStrip extends StatelessWidget {
   const _FilterStrip({required this.ctrl});
   final BrowseController ctrl;
 
   static const _levels      = ['all', 'rookie', 'amateur', 'regular', 'pro', 'elite'];
-  static const _levelLabels = ['All', 'Rookie', 'Amateur', 'Regular', 'Pro', 'Elite'];
+  static const _levelLabels = ['Any',  'Rookie', 'Amateur', 'Regular', 'Pro',  'Elite'];
   static const _vibes       = ['all', 'competitive', 'social', 'practice', 'beginner-friendly'];
-  static const _vibeLabels  = ['All', 'Competitive', 'Social', 'Practice', 'Beginner'];
+  static const _vibeLabels  = ['Any',  'Competitive', 'Social', 'Practice', 'Beginner'];
   static const _whens       = ['all', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  static const _whenLabels  = ['Any', 'Today', 'Tomorrow', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _whenLabels  = ['Any',  'Today', 'Tomorrow', 'Mon',    'Tue',     'Wed',       'Thu',      'Fri',     'Sat',      'Sun'];
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.blue900,
-      child: Column(
-        children: [
-          _FilterRow(label: 'LEVEL', values: _levels, labels: _levelLabels, selected: ctrl.selectedLevel),
-          _FilterRow(label: 'VIBE',  values: _vibes,  labels: _vibeLabels,  selected: ctrl.selectedVibe),
-          _FilterRow(label: 'WHEN',  values: _whens,  labels: _whenLabels,  selected: ctrl.selectedWhen),
-          // Area filter is built dynamically from the games actually in the
-          // pool — no point showing chips for areas with zero games, and the
-          // app supports any area users type during hosting.
-          Obx(() {
-            final areas = <String>{};
-            for (final g in ctrl.pool) {
-              if (g.area.trim().isNotEmpty) areas.add(g.area);
-            }
-            final sorted = areas.toList()..sort();
-            final values = ['all', ...sorted];
-            final labels = ['Any', ...sorted.map(_shortenArea)];
-            return _FilterRow(
-              label: 'AREA',
-              values: values,
-              labels: labels,
-              selected: ctrl.selectedArea,
-            );
-          }),
-          Container(height: 1, color: Colors.white.withOpacity(0.08)),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _FilterPill(
+              label: 'LEVEL',
+              valueRx: ctrl.selectedLevel,
+              values: _levels,
+              labels: _levelLabels,
+              onTap: () => _showSheet(
+                context,
+                title: 'Level',
+                values: _levels,
+                labels: _levelLabels,
+                rx: ctrl.selectedLevel,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _FilterPill(
+              label: 'VIBE',
+              valueRx: ctrl.selectedVibe,
+              values: _vibes,
+              labels: _vibeLabels,
+              onTap: () => _showSheet(
+                context,
+                title: 'Vibe',
+                values: _vibes,
+                labels: _vibeLabels,
+                rx: ctrl.selectedVibe,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _FilterPill(
+              label: 'WHEN',
+              valueRx: ctrl.selectedWhen,
+              values: _whens,
+              labels: _whenLabels,
+              onTap: () => _showSheet(
+                context,
+                title: 'When',
+                values: _whens,
+                labels: _whenLabels,
+                rx: ctrl.selectedWhen,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Area uses a dynamic option list: 'Any' + areas from games
+            // currently in the pool, plus the Karachi area catalogue as a
+            // fallback so the picker is usable even before any games exist.
+            Obx(() {
+              final fromPool = <String>{};
+              for (final g in ctrl.pool) {
+                if (g.area.trim().isNotEmpty) fromPool.add(g.area);
+              }
+              final all = <String>{...fromPool, ...?kPkAreas['Karachi']}.toList()
+                ..sort();
+              final values = ['all', ...all];
+              final labels = ['Any', ...all.map(_shortenArea)];
+              return _FilterPill(
+                label: 'AREA',
+                valueRx: ctrl.selectedArea,
+                values: values,
+                labels: labels,
+                onTap: () => _showSheet(
+                  context,
+                  title: 'Area',
+                  values: values,
+                  labels: labels,
+                  rx: ctrl.selectedArea,
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
 
-  /// Compact a long area name so it fits the chip without overflowing.
+  /// Compact a long area name for use in pill labels.
   static String _shortenArea(String s) => s
       .replaceAll('DHA Phase ', 'DHA Ph.')
       .replaceAll('Bahria Town', 'Bahria')
       .replaceAll(' Karachi', '')
       .replaceAll(' Lahore', '')
       .replaceAll(' Islamabad', '');
+
+  void _showSheet(
+    BuildContext context, {
+    required String title,
+    required List<String> values,
+    required List<String> labels,
+    required RxString rx,
+  }) {
+    Get.bottomSheet(
+      _FilterSheet(
+        title: title,
+        values: values,
+        labels: labels,
+        currentValue: rx.value,
+        onSelect: (v) {
+          rx.value = v;
+          Get.back();
+        },
+      ),
+      backgroundColor: Colors.transparent,
+    );
+  }
 }
 
-class _FilterRow extends StatelessWidget {
-  const _FilterRow({
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
     required this.label,
+    required this.valueRx,
     required this.values,
     required this.labels,
-    required this.selected,
+    required this.onTap,
   });
 
   final String label;
+  final RxString valueRx;
   final List<String> values;
   final List<String> labels;
-  final RxString selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 52,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Text(
-                label,
-                style: AppFonts.mono(9, color: Colors.white.withOpacity(0.40), letterSpacing: 0.6),
-              ),
+    return Obx(() {
+      final v = valueRx.value;
+      final isActive = v != 'all';
+      final idx = values.indexOf(v);
+      // Falls back to "Any" if the current value isn't in the option list
+      // (can happen briefly when the dynamic AREA list refreshes).
+      final shown = (idx >= 0 ? labels[idx] : 'Any');
+      return GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.ball : Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(kBorderRadiusPill),
+            border: Border.all(
+              color: isActive ? AppColors.ball : Colors.white.withOpacity(0.14),
             ),
           ),
-          Expanded(
-            child: Obx(() {
-              // Pull the reactive value into a local so Obx subscribes here
-              // instead of inside the deferred itemBuilder closure.
-              final sel = selected.value;
-              return ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
-                itemCount: values.length,
-                itemBuilder: (_, i) {
-                  final active = sel == values[i];
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: AppFonts.mono(
+                  9,
+                  color: isActive
+                      ? AppColors.ink.withOpacity(0.70)
+                      : Colors.white.withOpacity(0.50),
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                shown,
+                style: AppFonts.body(
+                  12,
+                  color: isActive ? AppColors.ink : Colors.white,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 16,
+                color: isActive
+                    ? AppColors.ink.withOpacity(0.70)
+                    : Colors.white.withOpacity(0.55),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _FilterSheet extends StatelessWidget {
+  const _FilterSheet({
+    required this.title,
+    required this.values,
+    required this.labels,
+    required this.currentValue,
+    required this.onSelect,
+  });
+
+  final String title;
+  final List<String> values;
+  final List<String> labels;
+  final String currentValue;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.72,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.ink.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Text(title, style: AppFonts.display(20, color: AppColors.ink, letterSpacing: -0.4)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: Get.back,
+                  child: Icon(Icons.close_rounded, color: AppColors.ink.withOpacity(0.50)),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, bottom + 20),
+              child: Wrap(
+                spacing: 8, runSpacing: 8,
+                children: List.generate(values.length, (i) {
+                  final isSelected = values[i] == currentValue;
                   return GestureDetector(
-                    onTap: () => selected.value = values[i],
+                    onTap: () => onSelect(values[i]),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      duration: const Duration(milliseconds: 140),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: active ? AppColors.ball : Colors.white.withOpacity(0.08),
+                        color: isSelected ? AppColors.ink : Colors.white,
                         borderRadius: BorderRadius.circular(kBorderRadiusPill),
                         border: Border.all(
-                          color: active ? AppColors.ball : Colors.white.withOpacity(0.14),
+                          color: isSelected ? AppColors.ink : AppColors.line,
                         ),
                       ),
                       child: Text(
                         labels[i],
                         style: AppFonts.body(
-                          11,
-                          color: active ? AppColors.ink : Colors.white.withOpacity(0.75),
-                          weight: active ? FontWeight.w700 : FontWeight.w400,
+                          13,
+                          color: isSelected ? Colors.white : AppColors.ink,
+                          weight: FontWeight.w600,
                         ),
                       ),
                     ),
                   );
-                },
-              );
-            }),
+                }),
+              ),
+            ),
           ),
         ],
       ),

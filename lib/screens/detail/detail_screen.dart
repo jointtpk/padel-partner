@@ -6,6 +6,7 @@ import '../../core/mock_data.dart';
 import '../../core/models/game.dart';
 import '../../core/models/game_time.dart';
 import '../../core/models/player.dart';
+import '../../core/services/identity_service.dart';
 import '../../core/widgets/avatar_widget.dart';
 import '../../core/widgets/chip_widget.dart';
 import '../../core/widgets/court_diagram.dart';
@@ -198,7 +199,11 @@ class _CourtSection extends StatelessWidget {
               const Spacer(),
               Obx(() {
                 final me = store.currentUser.value;
-                final eligible = game.hostId == me.id ||
+                final myUid = IdentityService.instance.cached;
+                final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
+                final isHost = (game.hostUid != null && game.hostUid == myUid) ||
+                    (game.hostUid == null && amLocalHost);
+                final eligible = isHost ||
                     game.playerIds.contains(me.id) ||
                     store.getBookingStatus(game.id) == 'confirmed';
                 final hasSlot = (store.courtPositions[game.id] ?? const {}).containsKey(me.id);
@@ -219,7 +224,11 @@ class _CourtSection extends StatelessWidget {
               final p = playerById(uid);
               if (p != null) assignments[slot] = p;
             });
-            final eligible = game.hostId == me.id ||
+            final myUid = IdentityService.instance.cached;
+            final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
+            final isHost = (game.hostUid != null && game.hostUid == myUid) ||
+                (game.hostUid == null && amLocalHost);
+            final eligible = isHost ||
                 game.playerIds.contains(me.id) ||
                 store.getBookingStatus(game.id) == 'confirmed';
             return CourtDiagram(
@@ -320,7 +329,20 @@ class _PlayersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final players = game.playerIds.map(playerById).whereType<Player>().toList();
+    // Resolve each id in playerIds to a Player. The host's id is `'me'`
+    // (legacy local-only id), which on the joiner's device would resolve to
+    // the joiner's own kMe — wrong. Prefer the embedded hostSnapshot for
+    // the host slot.
+    final players = <Player>[];
+    for (final id in game.playerIds) {
+      Player? p;
+      if (id == game.hostId && game.hostSnapshot != null) {
+        p = game.hostSnapshot;
+      } else {
+        p = playerById(id);
+      }
+      if (p != null) players.add(p);
+    }
     final emptyCount = game.total - players.length;
 
     return Padding(
@@ -499,7 +521,10 @@ class _HostSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final host = playerById(game.hostId);
+    // Prefer the host snapshot embedded in the game (correct on any device).
+    // Only fall back to playerById when there is no snapshot — that path is
+    // safe for locally-stored legacy games where the user *is* the host.
+    final host = game.hostSnapshot ?? playerById(game.hostId);
     if (host == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
@@ -597,7 +622,15 @@ class _StickyCtaBar extends StatelessWidget {
     final bottom = MediaQuery.of(context).padding.bottom;
     return Obx(() {
       final status = store.getBookingStatus(game.id);
-      final isHosting = game.hostId == kMe.id;
+      // Cross-device host check: prefer the Firebase/sync UID stamped on
+      // the game (set in AppController.addHostedGame). Only fall back to
+      // local presence in `hostedGames` when no uid is available — using
+      // `hostId == 'me'` directly is unsafe because every user's kMe.id is
+      // 'me' and would falsely flag joiners as the host.
+      final myUid = IdentityService.instance.cached;
+      final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
+      final isHosting = (game.hostUid != null && game.hostUid == myUid) ||
+          (game.hostUid == null && amLocalHost);
 
       return Container(
         padding: EdgeInsets.fromLTRB(20, 14, 20, bottom + 14),

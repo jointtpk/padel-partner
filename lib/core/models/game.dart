@@ -1,3 +1,5 @@
+import 'player.dart';
+
 class Game {
   const Game({
     required this.id,
@@ -23,6 +25,8 @@ class Game {
     this.pinLng,
     this.mapLink,
     this.autoApprove = false,
+    this.hostUid,
+    this.hostSnapshot,
   });
 
   final String id;
@@ -48,6 +52,18 @@ class Game {
   final double? pinLng;
   final String? mapLink;
   final bool autoApprove;
+  /// Cross-device host identity (Firebase Auth UID or per-install UUID).
+  /// Set when the game is published to Firestore. Used by the detail
+  /// screen's "am I host?" check; the local-only `hostId` is `'me'` for
+  /// every user and so can't disambiguate across devices.
+  final String? hostUid;
+
+  /// Snapshot of the host's player profile at publish time. Required for
+  /// non-host devices to render the "Hosted by" card with the correct
+  /// name / avatar / level — they have no way to look up the host's
+  /// profile otherwise (`playerById(hostId)` would resolve 'me' to their
+  /// own local kMe).
+  final Player? hostSnapshot;
 
   Game copyWith({
     String? id, String? club, String? area, String? when, String? time,
@@ -55,7 +71,7 @@ class Game {
     int? spots, int? total, String? hostId, List<String>? playerIds,
     String? vibe, String? court, String? weather, bool? hot,
     int? totalCost, String? address, double? pinLat, double? pinLng,
-    String? mapLink, bool? autoApprove,
+    String? mapLink, bool? autoApprove, String? hostUid, Player? hostSnapshot,
   }) =>
       Game(
         id: id ?? this.id,
@@ -81,6 +97,8 @@ class Game {
         pinLng: pinLng ?? this.pinLng,
         mapLink: mapLink ?? this.mapLink,
         autoApprove: autoApprove ?? this.autoApprove,
+        hostUid: hostUid ?? this.hostUid,
+        hostSnapshot: hostSnapshot ?? this.hostSnapshot,
       );
 
   Map<String, dynamic> toMap() => {
@@ -92,6 +110,8 @@ class Game {
         'totalCost': totalCost, 'address': address,
         'pinLat': pinLat, 'pinLng': pinLng,
         'mapLink': mapLink, 'autoApprove': autoApprove,
+        'hostUid': hostUid,
+        'hostSnapshot': hostSnapshot?.toMap(),
       };
 
   factory Game.fromMap(Map<String, dynamic> m) => Game(
@@ -118,5 +138,9 @@ class Game {
         pinLng: (m['pinLng'] as num?)?.toDouble(),
         mapLink: m['mapLink'] as String?,
         autoApprove: m['autoApprove'] ?? false,
+        hostUid: m['hostUid'] as String?,
+        hostSnapshot: m['hostSnapshot'] is Map
+            ? Player.fromMap(Map<String, dynamic>.from(m['hostSnapshot'] as Map))
+            : null,
       );
 }

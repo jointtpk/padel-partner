@@ -228,7 +228,6 @@ class GameSyncService {
     final out = <String, dynamic>{};
     raw.forEach((k, v) {
       if (v is Timestamp) return; // skip server timestamps
-      if (k == 'hostUid') return; // not part of Game model
       out[k] = v;
     });
     return out;

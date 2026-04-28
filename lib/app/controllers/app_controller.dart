@@ -10,6 +10,7 @@ import '../../core/models/player.dart';
 import '../../core/mock_data.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/game_sync_service.dart';
+import '../../core/services/identity_service.dart';
 import '../../core/services/state_storage.dart';
 import '../../core/services/user_storage.dart';
 import '../../core/theme/tokens.dart';
@@ -366,12 +367,18 @@ class AppController extends GetxController {
 
   // ─── Host games ───────────────────────────────────────────────────────────
   void addHostedGame(Game game) {
-    hostedGames.add(game);
-    bookings.add(Booking(gameId: game.id, status: 'hosting'));
-    // Publish to Firestore so deep-link recipients can fetch by id and
-    // submit join requests that reach this device. The `ever` watcher on
-    // hostedGames will (re-)attach the request listener.
-    GameSyncService.instance.publishGame(game);
+    // Stamp the cross-device host identity *and* a snapshot of this user's
+    // profile on the game so non-host devices can correctly render the
+    // "Hosted by" card. Without this, `playerById(hostId)` resolves the
+    // joiner's own kMe and the host card shows the wrong name/avatar.
+    final uid = IdentityService.instance.cached;
+    final stamped = game.copyWith(
+      hostUid: uid ?? game.hostUid,
+      hostSnapshot: currentUser.value,
+    );
+    hostedGames.add(stamped);
+    bookings.add(Booking(gameId: stamped.id, status: 'hosting'));
+    GameSyncService.instance.publishGame(stamped);
   }
 
   /// Replace a hosted game with an edited copy and republish it. Caller is
@@ -381,8 +388,12 @@ class AppController extends GetxController {
   void updateHostedGame(Game updated) {
     final i = hostedGames.indexWhere((g) => g.id == updated.id);
     if (i < 0) return;
-    hostedGames[i] = updated;
-    GameSyncService.instance.publishGame(updated);
+    // Keep the existing hostUid stamp through edits.
+    final next = updated.hostUid != null
+        ? updated
+        : updated.copyWith(hostUid: hostedGames[i].hostUid);
+    hostedGames[i] = next;
+    GameSyncService.instance.publishGame(next);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
