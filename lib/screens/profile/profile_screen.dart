@@ -128,6 +128,8 @@ class _ProfileHeaderSliver extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _SettingsMenu(store: store),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => Get.toNamed(Routes.subscription),
                     child: Container(
@@ -273,6 +275,237 @@ class _StatDivider extends StatelessWidget {
     width: 1, height: 32,
     color: Colors.white.withOpacity(0.10),
   );
+}
+
+/// Settings cluster shown in the header of the user's own profile. Hosts
+/// the entry points the user complained were buried — friends, join
+/// requests, and sign-out. Pending-request count appears as a red dot so
+/// it's visible even before the menu is opened.
+class _SettingsMenu extends StatelessWidget {
+  const _SettingsMenu({required this.store});
+  final AppController store;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final pendingReq = store.totalPendingRequests;
+      final pendingFriend = store.pendingFriendRequests;
+      final hasBadge = pendingReq + pendingFriend > 0;
+      return GestureDetector(
+        onTap: () => _open(context),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.settings_outlined, color: Colors.white, size: 18),
+            ),
+            if (hasBadge)
+              Positioned(
+                top: -2, right: -2,
+                child: Container(
+                  width: 10, height: 10,
+                  decoration: BoxDecoration(
+                    color: AppColors.hot,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.blue900, width: 2),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _open(BuildContext context) {
+    Get.bottomSheet(
+      Obx(() {
+        final pendingReq = store.totalPendingRequests;
+        final pendingFriend = store.pendingFriendRequests;
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            20, 16, 20, 24 + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Account',
+                  style: AppFonts.display(20, color: AppColors.ink, letterSpacing: -0.4)),
+              const SizedBox(height: 14),
+              _SettingsTile(
+                icon: Icons.group_outlined,
+                label: 'Friends',
+                sub: pendingFriend > 0
+                    ? '$pendingFriend pending request${pendingFriend == 1 ? '' : 's'}'
+                    : 'Manage your friend list',
+                badge: pendingFriend,
+                onTap: () {
+                  Get.back();
+                  Get.toNamed(Routes.friends);
+                },
+              ),
+              _SettingsTile(
+                icon: Icons.inbox_outlined,
+                label: 'Join requests',
+                sub: pendingReq > 0
+                    ? '$pendingReq awaiting your approval'
+                    : 'Approve or decline players',
+                badge: pendingReq,
+                onTap: () {
+                  Get.back();
+                  Get.toNamed(Routes.requests);
+                },
+              ),
+              _SettingsTile(
+                icon: Icons.workspace_premium_outlined,
+                label: 'Subscription',
+                sub: 'Manage your plan',
+                onTap: () {
+                  Get.back();
+                  Get.toNamed(Routes.subscription);
+                },
+              ),
+              const SizedBox(height: 8),
+              Divider(color: AppColors.line, height: 1),
+              const SizedBox(height: 8),
+              _SettingsTile(
+                icon: Icons.logout_rounded,
+                label: 'Sign out',
+                sub: 'Log out of this account',
+                danger: true,
+                onTap: () {
+                  Get.back();
+                  _confirmSignOut(context);
+                },
+              ),
+            ],
+          ),
+        );
+      }),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+    );
+  }
+
+  void _confirmSignOut(BuildContext context) {
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text('Sign out?',
+            style: AppFonts.display(18, color: AppColors.ink)),
+        content: Text(
+          'You can sign back in with your email any time to restore this profile.',
+          style: AppFonts.body(13, color: AppColors.ink.withOpacity(0.70)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Get.back,
+            child: Text('Cancel',
+                style: AppFonts.body(13, color: AppColors.ink.withOpacity(0.70))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Get.back();
+              await store.signOut();
+            },
+            child: Text('Sign out',
+                style: AppFonts.body(13, color: AppColors.hot, weight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.onTap,
+    this.badge = 0,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String sub;
+  final VoidCallback onTap;
+  final int badge;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.hot : AppColors.ink;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: danger ? AppColors.hot.withOpacity(0.10) : AppColors.mist,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(label,
+                          style: AppFonts.body(15, color: color, weight: FontWeight.w700)),
+                      if (badge > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.hot,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('$badge',
+                              style: AppFonts.mono(9, color: Colors.white, weight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(sub, style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.55))),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.ink.withOpacity(0.30)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FriendPill extends StatelessWidget {

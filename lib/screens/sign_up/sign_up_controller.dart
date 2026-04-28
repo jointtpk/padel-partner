@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart';
+import '../../core/mock_data.dart';
+import '../../core/models/player.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/email_otp_service.dart';
+import '../../core/services/user_storage.dart';
 
 class SignUpController extends GetxController {
   // ── Step ──────────────────────────────────────────────────────────────────
@@ -36,6 +39,12 @@ class SignUpController extends GetxController {
   // ── Loading ───────────────────────────────────────────────────────────────
   final isLoading = false.obs;
   final errorMsg  = ''.obs;
+
+  /// True when the email entered at step 1 already maps to a known
+  /// profile in the local registry. After OTP verification we skip the
+  /// remaining sign-up steps and restore that profile straight to home,
+  /// so the same email always lands on the same identity.
+  Player? _returningUser;
 
   // ── Validation ────────────────────────────────────────────────────────────
   static final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
@@ -93,6 +102,10 @@ class SignUpController extends GetxController {
   Future<void> _sendCode() async {
     isLoading.value = true;
     try {
+      // Detect a returning user upfront so we can branch after OTP.
+      _returningUser =
+          await UserStorage.findByEmail(emailController.text.trim());
+
       _expectedCode = EmailOtpService.generateCode();
       _codeIssuedAt = DateTime.now();
       final ok = await EmailOtpService.sendCode(
@@ -125,7 +138,32 @@ class SignUpController extends GetxController {
       return;
     }
     errorMsg.value = '';
+
+    // Returning user: skip the profile/tags steps and restore the saved
+    // identity. Same email = same person — never create a duplicate.
+    final existing = _returningUser;
+    if (existing != null) {
+      _restoreReturningUser(existing);
+      return;
+    }
+
     step.value = 3;
+  }
+
+  Future<void> _restoreReturningUser(Player p) async {
+    await UserStorage.save(p);
+    kMe = p;
+    AppController.to.currentUser.value = p;
+    unawaited(AuthService.instance.ensureSignedIn());
+    Get.offAllNamed(Routes.home);
+    Get.snackbar(
+      'Welcome back',
+      'Signed in as ${p.name}',
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
+      duration: const Duration(seconds: 2),
+    );
   }
 
   Future<void> resendCode() async {

@@ -198,18 +198,13 @@ class _CourtSection extends StatelessWidget {
               Text('Line-up', style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.3)),
               const Spacer(),
               Obx(() {
-                final me = store.currentUser.value;
                 final myUid = IdentityService.instance.cached;
                 final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
                 final isHost = (game.hostUid != null && game.hostUid == myUid) ||
                     (game.hostUid == null && amLocalHost);
-                final eligible = isHost ||
-                    game.playerIds.contains(me.id) ||
-                    store.getBookingStatus(game.id) == 'confirmed';
-                final hasSlot = (store.courtPositions[game.id] ?? const {}).containsKey(me.id);
-                if (!eligible || hasSlot) return const SizedBox.shrink();
+                if (!isHost) return const SizedBox.shrink();
                 return Text(
-                  'Tap a + to pick your spot',
+                  'Tap a slot to assign a player',
                   style: AppFonts.mono(10, color: AppColors.ink.withOpacity(0.45), letterSpacing: 0.3),
                 );
               }),
@@ -217,32 +212,204 @@ class _CourtSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Obx(() {
-            final me = store.currentUser.value;
             final positions = store.courtPositions[game.id] ?? const {};
             final assignments = <int, Player>{};
+            // Resolve uid → Player. The host's local id is `'me'`, so we
+            // pull the host's stamped snapshot first when the slot maps
+            // to the host id, then fall back to playerById for everyone
+            // else (joiners' own kMe, registered remote players).
             positions.forEach((uid, slot) {
-              final p = playerById(uid);
+              Player? p;
+              if (uid == game.hostId) {
+                p = game.hostSnapshot ??
+                    (store.hostedGames.any((g) => g.id == game.id)
+                        ? store.currentUser.value
+                        : null);
+              } else if (uid == store.currentUser.value.id) {
+                p = store.currentUser.value;
+              } else {
+                p = playerById(uid);
+              }
               if (p != null) assignments[slot] = p;
             });
             final myUid = IdentityService.instance.cached;
             final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
             final isHost = (game.hostUid != null && game.hostUid == myUid) ||
                 (game.hostUid == null && amLocalHost);
-            final eligible = isHost ||
-                game.playerIds.contains(me.id) ||
-                store.getBookingStatus(game.id) == 'confirmed';
             return CourtDiagram(
               slotAssignments: assignments,
-              onClaimSlot: eligible
-                  ? (slot) {
+              slotCount: game.total,
+              // Only the host can shuffle the line-up — every other viewer
+              // gets a read-only diagram.
+              onClaimSlot: isHost
+                  ? (slot) async {
                       HapticFeedback.lightImpact();
-                      store.claimCourtPosition(game.id, me.id, slot);
+                      await _showSlotPicker(
+                        context: context,
+                        game: game,
+                        slot: slot,
+                        store: store,
+                      );
                     }
                   : null,
             );
           }),
         ],
       ),
+    );
+  }
+
+  /// Opens a bottom sheet listing every player in the line-up so the host
+  /// can place one of them on [slot]. Already-placed players are still
+  /// shown (with their current slot) so the host can swap.
+  Future<void> _showSlotPicker({
+    required BuildContext context,
+    required Game game,
+    required int slot,
+    required AppController store,
+  }) async {
+    // Resolve every line-up id to a Player using the same precedence as
+    // the diagram render, so host/me/remote all show correctly.
+    final players = <({String uid, Player player})>[];
+    for (final uid in game.playerIds) {
+      Player? p;
+      if (uid == game.hostId) {
+        p = game.hostSnapshot ??
+            (store.hostedGames.any((g) => g.id == game.id)
+                ? store.currentUser.value
+                : null);
+      } else if (uid == store.currentUser.value.id) {
+        p = store.currentUser.value;
+      } else {
+        p = playerById(uid);
+      }
+      if (p != null) players.add((uid: uid, player: p));
+    }
+    final positions = store.courtPositions[game.id] ?? const {};
+    String? currentUidOnSlot;
+    positions.forEach((uid, s) {
+      if (s == slot) currentUidOnSlot = uid;
+    });
+
+    await Get.bottomSheet(
+      Container(
+        decoration: const BoxDecoration(
+          color: AppColors.paper,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20, 16, 20, 20 + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.ink.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Assign player to position ${slot + 1}',
+                style: AppFonts.display(18, color: AppColors.ink, letterSpacing: -0.3)),
+            const SizedBox(height: 4),
+            Text('Pick a confirmed player from the line-up.',
+                style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.55))),
+            const SizedBox(height: 16),
+            if (players.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No confirmed players yet. Approve a request first.',
+                  style: AppFonts.body(13, color: AppColors.ink.withOpacity(0.55)),
+                ),
+              )
+            else
+              ...players.map((row) {
+                final placedSlot = positions[row.uid];
+                final isOnThisSlot = placedSlot == slot;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (isOnThisSlot) {
+                        Navigator.of(context).pop();
+                        return;
+                      }
+                      store.setCourtPosition(game.id, row.uid, slot);
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isOnThisSlot ? AppColors.ball : AppColors.line,
+                          width: isOnThisSlot ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          AvatarWidget(player: row.player, size: 40),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(row.player.name,
+                                    style: AppFonts.body(14, color: AppColors.ink, weight: FontWeight.w700)),
+                                if (placedSlot != null)
+                                  Text(
+                                    isOnThisSlot
+                                        ? 'Currently in this slot'
+                                        : 'Currently in slot ${placedSlot + 1}',
+                                    style: AppFonts.body(11, color: AppColors.ink.withOpacity(0.50)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            isOnThisSlot ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                            color: isOnThisSlot ? AppColors.ball : AppColors.ink.withOpacity(0.40),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            if (currentUidOnSlot != null) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () {
+                  store.clearCourtSlot(game.id, slot);
+                  Navigator.of(context).pop();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.hot.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.hot.withOpacity(0.30)),
+                  ),
+                  child: Center(
+                    child: Text('Clear this slot',
+                        style: AppFonts.body(13, color: AppColors.hot, weight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
     );
   }
 }
@@ -687,10 +854,10 @@ class _StickyCtaBar extends StatelessWidget {
     final hasStarted = GameTime.hasStarted(game);
 
     if (isHosting) {
-      // The host can still edit the game while no other player has joined
-      // (i.e. only their own id is in playerIds). Locking edits the moment
-      // someone else is in keeps the deal honest for joiners.
-      final canEdit = !hasStarted && game.playerIds.length <= 1;
+      // The host can edit the game any time before it starts. Past the
+      // start, fields are locked because there's nothing meaningful to
+      // change retroactively.
+      final canEdit = !hasStarted;
       return Row(
         children: [
           if (canEdit) ...[
@@ -872,9 +1039,9 @@ class _StaticBanner extends StatelessWidget {
 }
 
 // ─── Edit game sheet ─────────────────────────────────────────────────────────
-// Lets the host change the most-likely-to-need-changing fields while no
-// joiner has confirmed yet. Court / area / vibe / spots are kept editable;
-// club name and weather are not (those rarely change post-publish).
+// Full host-editable view: club, location, court, vibe, schedule, cost, and
+// open spots. Edits are allowed any time before the game starts; once it
+// has started the Edit button is hidden by the CTA bar.
 
 class _EditGameSheet extends StatefulWidget {
   const _EditGameSheet({required this.game});
@@ -888,12 +1055,19 @@ class _EditGameSheetState extends State<_EditGameSheet> {
   static const _whens = ['Today', 'Tomorrow', 'Saturday', 'Sunday', 'Monday'];
   static const _vibes = ['Social', 'Competitive', 'Practice', 'Beginner-friendly'];
   static const _durations = [60, 90, 120];
+  static const _courtTypes = ['Indoor', 'Outdoor'];
 
+  late TextEditingController _clubCtrl;
+  late String _city;
+  late String _area;
+  late TextEditingController _courtNameCtrl;
+  late String _courtType;
   late String _when;
   late TimeOfDay _time;
   late int _duration;
   late int _spots;
   late String _vibe;
+  late bool _autoApprove;
   late TextEditingController _totalCtrl;
 
   bool _saving = false;
@@ -901,27 +1075,55 @@ class _EditGameSheetState extends State<_EditGameSheet> {
   @override
   void initState() {
     super.initState();
+    final g = widget.game;
+    _clubCtrl = TextEditingController(text: g.club);
+    _city = kPkCities.firstWhere(
+      (c) => c.toLowerCase() == _detectCity(g).toLowerCase(),
+      orElse: () => kPkCities.first,
+    );
+    _area = (kPkAreas[_city] ?? const []).firstWhere(
+      (a) => a.toLowerCase() == g.area.toLowerCase(),
+      orElse: () => g.area,
+    );
+    final parts = g.court.split(' · ');
+    _courtNameCtrl = TextEditingController(text: parts.first);
+    _courtType = _courtTypes.firstWhere(
+      (t) => parts.length > 1 && parts[1].toLowerCase() == t.toLowerCase(),
+      orElse: () => g.weather.toLowerCase() == 'indoor' ? 'Indoor' : 'Outdoor',
+    );
     _when = _whens.firstWhere(
-      (w) => w.toLowerCase() == widget.game.when.toLowerCase(),
+      (w) => w.toLowerCase() == g.when.toLowerCase(),
       orElse: () => 'Today',
     );
-    _time = _parseTime(widget.game.time);
+    _time = _parseTime(g.time);
     _duration = int.tryParse(
-            RegExp(r'\d+').firstMatch(widget.game.duration)?.group(0) ?? '') ??
+            RegExp(r'\d+').firstMatch(g.duration)?.group(0) ?? '') ??
         60;
-    _spots = widget.game.spots > 0 ? widget.game.spots : 1;
+    _spots = g.spots > 0 ? g.spots : 1;
     _vibe = _vibes.firstWhere(
-      (v) => v.toLowerCase() == widget.game.vibe.toLowerCase(),
+      (v) => v.toLowerCase() == g.vibe.toLowerCase(),
       orElse: () => 'Social',
     );
+    _autoApprove = g.autoApprove;
     _totalCtrl = TextEditingController(
-        text: (widget.game.totalCost ?? 0) > 0
-            ? widget.game.totalCost.toString()
-            : '');
+        text: (g.totalCost ?? 0) > 0 ? g.totalCost.toString() : '');
+  }
+
+  /// Best-effort city detection: prefer the area's parent city in
+  /// `kPkAreas`; fall back to `Karachi` when no mapping matches.
+  String _detectCity(Game g) {
+    for (final entry in kPkAreas.entries) {
+      if (entry.value.any((a) => a.toLowerCase() == g.area.toLowerCase())) {
+        return entry.key;
+      }
+    }
+    return 'Karachi';
   }
 
   @override
   void dispose() {
+    _clubCtrl.dispose();
+    _courtNameCtrl.dispose();
     _totalCtrl.dispose();
     super.dispose();
   }
@@ -953,15 +1155,37 @@ class _EditGameSheetState extends State<_EditGameSheet> {
 
   Future<void> _save() async {
     if (_saving) return;
+    final club = _clubCtrl.text.trim();
+    final courtName = _courtNameCtrl.text.trim();
+    if (club.isEmpty || courtName.isEmpty || _area.isEmpty) {
+      Get.snackbar(
+        '',
+        '',
+        titleText: Text('Hold up 👋',
+            style: AppFonts.display(13, color: AppColors.ink)),
+        messageText: Text('Club, area and court name are required.',
+            style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.7))),
+        backgroundColor: AppColors.ball,
+        borderRadius: 14,
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
     setState(() => _saving = true);
     HapticFeedback.lightImpact();
     final updated = widget.game.copyWith(
+      club: club,
+      area: _area,
+      court: '$courtName · $_courtType',
+      weather: _courtType == 'Indoor' ? 'Indoor' : '—',
       when: _when,
       time: _formatTime(_time),
       duration: '$_duration min',
       spots: _spots,
       total: _spots + 1,
       vibe: _vibe,
+      autoApprove: _autoApprove,
       price: _pricePerHead,
       totalCost: int.tryParse(_totalCtrl.text) ?? widget.game.totalCost,
     );
@@ -1024,6 +1248,63 @@ class _EditGameSheetState extends State<_EditGameSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _label('Club name'),
+                    const SizedBox(height: 8),
+                    _SheetText(
+                      controller: _clubCtrl,
+                      hint: 'e.g. Padel Up Karachi',
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('City'),
+                    const SizedBox(height: 8),
+                    _SheetDropdown<String>(
+                      value: _city,
+                      items: kPkCities,
+                      label: (c) => c,
+                      onChanged: (v) => setState(() {
+                        _city = v ?? _city;
+                        _area = (kPkAreas[_city] ?? const []).isNotEmpty
+                            ? (kPkAreas[_city]!.first)
+                            : '';
+                      }),
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Area'),
+                    const SizedBox(height: 8),
+                    Builder(
+                      builder: (_) {
+                        final areas = kPkAreas[_city] ?? const <String>[];
+                        return _SheetDropdown<String>(
+                          value: areas.contains(_area) ? _area : null,
+                          items: areas,
+                          label: (a) => a,
+                          hint: 'Select area',
+                          onChanged: (v) => setState(() => _area = v ?? ''),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Court name / number'),
+                    const SizedBox(height: 8),
+                    _SheetText(
+                      controller: _courtNameCtrl,
+                      hint: 'e.g. Court 2',
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Court type'),
+                    const SizedBox(height: 8),
+                    _Pills<String>(
+                      values: _courtTypes,
+                      labels: _courtTypes,
+                      selected: _courtType,
+                      onTap: (v) => setState(() => _courtType = v),
+                    ),
+                    const SizedBox(height: 18),
+
                     _label('Day'),
                     const SizedBox(height: 8),
                     _Pills<String>(
@@ -1150,6 +1431,73 @@ class _EditGameSheetState extends State<_EditGameSheet> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 18),
+
+                    _label('Approval mode'),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () => setState(() => _autoApprove = !_autoApprove),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.line),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _autoApprove ? '⚡ Auto-approve' : '✋ Manual approval',
+                                    style: AppFonts.body(13,
+                                        color: AppColors.ink, weight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _autoApprove
+                                        ? 'Anyone can join instantly'
+                                        : 'You approve each request',
+                                    style: AppFonts.body(11,
+                                        color: AppColors.ink.withOpacity(0.55)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 42,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: _autoApprove
+                                    ? AppColors.ball
+                                    : AppColors.ink.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: AnimatedAlign(
+                                duration: const Duration(milliseconds: 180),
+                                alignment: _autoApprove
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.all(3),
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: _autoApprove
+                                        ? AppColors.ink
+                                        : Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 24),
 
                     SizedBox(
@@ -1172,6 +1520,25 @@ class _EditGameSheetState extends State<_EditGameSheet> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: _saving ? null : _confirmCancel,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.hot.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.hot.withOpacity(0.30)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Cancel match',
+                            style: AppFonts.body(14, color: AppColors.hot, weight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 8),
                   ],
                 ),
@@ -1179,6 +1546,50 @@ class _EditGameSheetState extends State<_EditGameSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmCancel() {
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text('Cancel this match?',
+            style: AppFonts.display(18, color: AppColors.ink)),
+        content: Text(
+          'The game will be removed from your list and joiners will see it disappear. This can\'t be undone.',
+          style: AppFonts.body(13, color: AppColors.ink.withOpacity(0.70)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Get.back,
+            child: Text('Keep match',
+                style: AppFonts.body(13, color: AppColors.ink.withOpacity(0.70))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Get.back(); // close dialog
+              if (mounted) Navigator.of(context).pop(); // close edit sheet
+              await AppController.to.cancelHostedGame(widget.game.id);
+              Get.offAllNamed(Routes.home);
+              Get.snackbar(
+                '',
+                '',
+                titleText: Text('Match cancelled',
+                    style: AppFonts.display(14, color: AppColors.ink)),
+                messageText: Text('The game has been removed.',
+                    style: AppFonts.body(12,
+                        color: AppColors.ink.withOpacity(0.65))),
+                backgroundColor: AppColors.ball,
+                borderRadius: 14,
+                margin: const EdgeInsets.all(16),
+                duration: const Duration(seconds: 2),
+              );
+            },
+            child: Text('Cancel match',
+                style: AppFonts.body(13, color: AppColors.hot, weight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }
@@ -1250,6 +1661,85 @@ class _StepBtn extends StatelessWidget {
           border: Border.all(color: AppColors.line),
         ),
         child: Icon(icon, color: AppColors.ink, size: 20),
+      ),
+    );
+  }
+}
+
+class _SheetText extends StatelessWidget {
+  const _SheetText({required this.controller, required this.hint});
+  final TextEditingController controller;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      style: AppFonts.body(14, color: AppColors.ink),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: AppFonts.body(14, color: AppColors.ink.withOpacity(0.30)),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.ball, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDropdown<T> extends StatelessWidget {
+  const _SheetDropdown({
+    required this.value,
+    required this.items,
+    required this.label,
+    required this.onChanged,
+    this.hint,
+  });
+
+  final T? value;
+  final List<T> items;
+  final String Function(T) label;
+  final ValueChanged<T?> onChanged;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: hint != null
+              ? Text(hint!, style: AppFonts.body(14, color: AppColors.ink.withOpacity(0.30)))
+              : null,
+          style: AppFonts.body(14, color: AppColors.ink),
+          iconEnabledColor: AppColors.ink.withOpacity(0.45),
+          isExpanded: true,
+          items: items
+              .map((item) => DropdownMenuItem<T>(
+                    value: item,
+                    child: Text(label(item), style: AppFonts.body(14, color: AppColors.ink)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
       ),
     );
   }

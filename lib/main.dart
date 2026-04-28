@@ -39,6 +39,11 @@ void main() async {
   );
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  // ── Seed the two demo accounts the team uses for sign-in testing ─────────
+  // Idempotent — won't overwrite real edits made to those profiles after
+  // the first launch.
+  await UserStorage.ensureSeedUsers();
+
   // ── Load persisted user (if any) before deciding initial route ────────────
   final saved = await UserStorage.load();
   if (saved != null) kMe = saved;

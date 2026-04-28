@@ -3,7 +3,10 @@
     "allow": [
       "Bash(flutter pub *)",
       "Bash(npm --version)",
-      "Bash(firebase --version)"
+      "Bash(firebase --version)",
+      "Read(//c/Users/taqir/.claude/projects/D--Bronze-Digitals-Clients-Padel-Partner---Mujtaba-padel-partner/memory//**)",
+      "Read(//c/Users/taqir/.claude/projects/D--Bronze-Digitals-Clients-Padel-Partner---Mujtaba-padel-partner//**)",
+      "Bash(flutter analyze *)"
     ]
   }
 }

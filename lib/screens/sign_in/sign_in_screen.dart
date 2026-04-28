@@ -42,8 +42,12 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final saved = await UserStorage.load();
-    if (saved == null || saved.email == null || saved.email!.toLowerCase() != email.toLowerCase()) {
+    // Lookup the email-keyed registry (populated at sign-up + seed-users)
+    // instead of only the active session, so the SAME email always
+    // restores the SAME profile on this device — even if a different
+    // user is currently signed in.
+    final existing = await UserStorage.findByEmail(email);
+    if (existing == null) {
       setState(() => _error = 'No account found for this email on this device.');
       return;
     }
@@ -87,13 +91,16 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _restoreSession() async {
-    final saved = await UserStorage.load();
-    if (saved == null) {
+    final email = _emailCtrl.text.trim();
+    final existing = await UserStorage.findByEmail(email);
+    if (existing == null) {
       setState(() => _error = 'Something went wrong. Try signing up again.');
       return;
     }
-    kMe = saved;
-    AppController.to.currentUser.value = saved;
+    // Save into the active session AND keep the registry in sync.
+    await UserStorage.save(existing);
+    kMe = existing;
+    AppController.to.currentUser.value = existing;
     Get.offAllNamed(Routes.home);
   }
 

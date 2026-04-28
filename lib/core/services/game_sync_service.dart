@@ -99,6 +99,30 @@ class GameSyncService {
     }
   }
 
+  /// Deletes a previously-published game and all its pending requests.
+  /// Called by the host when they cancel the match — joiners' devices
+  /// stop seeing it on their next stream tick.
+  Future<bool> deleteGame(String gameId) async {
+    if (!_enabled) return false;
+    try {
+      // Best-effort: clear pending requests first so streamed listeners
+      // don't briefly emit an empty parent + ghost subcollection.
+      final requests = await _firestore!
+          .collection('games')
+          .doc(gameId)
+          .collection('requests')
+          .get();
+      for (final d in requests.docs) {
+        await d.reference.delete();
+      }
+      await _firestore!.collection('games').doc(gameId).delete();
+      return true;
+    } catch (e) {
+      debugPrint('GameSyncService.deleteGame error: $e');
+      return false;
+    }
+  }
+
   /// Fetch a previously-published game by id. Used by the deep-link receiver
   /// when the URL carries only `?id=…` instead of an embedded payload.
   Future<Game?> fetchGame(String gameId) async {

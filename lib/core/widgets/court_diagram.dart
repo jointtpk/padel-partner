@@ -7,13 +7,22 @@ class CourtDiagram extends StatelessWidget {
   const CourtDiagram({
     super.key,
     this.slotAssignments = const {},
+    this.slotCount = 4,
     this.onClaimSlot,
   });
 
   /// slotIndex (0..3) -> Player who has claimed it.
   final Map<int, Player> slotAssignments;
 
-  /// Tapped on an empty slot. When null, empty slots are not interactive.
+  /// Number of slots to render — typically `game.total`. The court is a
+  /// 2v2 padel court with 4 corners; smaller games (e.g. 1v1 with 2
+  /// players, or 2v1 with 3) leave the unused corners blank instead of
+  /// drawing empty placeholder dots that the user reads as "missing
+  /// players".
+  final int slotCount;
+
+  /// Tapped on a slot (filled or empty). When null, slots are not
+  /// interactive. Hosts pass a handler that opens the player picker.
   final ValueChanged<int>? onClaimSlot;
 
   static const _positions = [
@@ -25,6 +34,7 @@ class CourtDiagram extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final slots = slotCount.clamp(1, 4);
     return AspectRatio(
       aspectRatio: 2.0,
       child: Container(
@@ -42,7 +52,7 @@ class CourtDiagram extends StatelessWidget {
           child: Stack(
             children: [
               CustomPaint(painter: _CourtLinePainter(), size: Size.infinite),
-              for (int i = 0; i < 4; i++)
+              for (int i = 0; i < slots; i++)
                 Align(
                   alignment: _positions[i],
                   child: _slotAt(i),
@@ -57,6 +67,12 @@ class CourtDiagram extends StatelessWidget {
   Widget _slotAt(int i) {
     final p = slotAssignments[i];
     if (p != null) {
+      if (onClaimSlot != null) {
+        return GestureDetector(
+          onTap: () => onClaimSlot!(i),
+          child: AvatarWidget(player: p, size: 40, ring: true),
+        );
+      }
       return AvatarWidget(player: p, size: 40, ring: true);
     }
     if (onClaimSlot != null) {

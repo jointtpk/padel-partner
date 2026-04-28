@@ -53,6 +53,27 @@ class AppController extends GetxController {
     courtPositions.refresh();
   }
 
+  /// Host-side assignment: place [userId] on [slot], displacing whoever was
+  /// there. Unlike [claimCourtPosition] this overrides existing claims —
+  /// only call when the host explicitly picks a player for a slot.
+  void setCourtPosition(String gameId, String userId, int slot) {
+    final cur = Map<String, int>.from(courtPositions[gameId] ?? const {});
+    cur.removeWhere((_, v) => v == slot);
+    cur.removeWhere((k, _) => k == userId);
+    cur[userId] = slot;
+    courtPositions[gameId] = cur;
+    courtPositions.refresh();
+  }
+
+  /// Clears whatever player is on [slot] for [gameId]. Used by the host
+  /// when reassigning positions.
+  void clearCourtSlot(String gameId, int slot) {
+    final cur = Map<String, int>.from(courtPositions[gameId] ?? const {});
+    cur.removeWhere((_, v) => v == slot);
+    courtPositions[gameId] = cur;
+    courtPositions.refresh();
+  }
+
   void updateCurrentUser({
     String? name,
     String? handle,
@@ -421,7 +442,25 @@ class AppController extends GetxController {
     );
     hostedGames.add(stamped);
     bookings.add(Booking(gameId: stamped.id, status: 'hosting'));
+    // Pre-place the host on slot 0 so the court diagram reflects the
+    // actual occupied/open ratio from the moment the game is created.
+    setCourtPosition(stamped.id, currentUser.value.id, 0);
     GameSyncService.instance.publishGame(stamped);
+  }
+
+  /// Removes a hosted game entirely: drops it from local state, deletes
+  /// the matching booking, clears any court positions, and pulls it from
+  /// Firestore so it disappears for joiners too.
+  Future<void> cancelHostedGame(String gameId) async {
+    hostedGames.removeWhere((g) => g.id == gameId);
+    bookings.removeWhere((b) => b.gameId == gameId);
+    requests.remove(gameId);
+    courtPositions.remove(gameId);
+    requests.refresh();
+    courtPositions.refresh();
+    _requestSubs.remove(gameId)?.cancel();
+    _bookingSubs.remove(gameId)?.cancel();
+    await GameSyncService.instance.deleteGame(gameId);
   }
 
   /// Replace a hosted game with an edited copy and republish it. Caller is
