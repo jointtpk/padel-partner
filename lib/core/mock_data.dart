@@ -9,11 +9,21 @@ import 'models/friend.dart';
 // kPlayers is intentionally empty so the app shows live data only.
 const kPlayers = <Player>[];
 
+/// Snapshots of remote players (e.g. join-request authors from other devices).
+/// Populated by `GameSyncService` listeners; consumed transparently by
+/// `playerById` so existing UI code keeps working without changes.
+final Map<String, Player> kRemotePlayers = {};
+
+void registerRemotePlayer(Player p) {
+  kRemotePlayers[p.id] = p;
+}
+
 Player? playerById(String id) {
+  if (id == kMe.id) return kMe;
   try {
     return kPlayers.firstWhere((p) => p.id == id);
   } catch (_) {
-    return null;
+    return kRemotePlayers[id];
   }
 }
 
@@ -40,7 +50,13 @@ Player kMe = _kDefaultUser;
 
 // ─── Games ───────────────────────────────────────────────────────────────────
 // Real games will appear once users host them — no seed games.
-const kGames = <Game>[];
+const kGames = <Game>[
+  Game(id: 'g1', club: 'Padel Up Karachi',   area: 'DHA Phase 8',    when: 'Today', time: '6:30 PM',  duration: '90 min',  level: 'Pro',     levelKey: 'pro',     price: 1200, spots: 1, total: 4, hostId: 'me', playerIds: ['me'], vibe: 'Competitive',        court: 'Court 2 · Indoor',   weather: 'Indoor',      hot: true),
+  Game(id: 'g2', club: 'The Padel Club',      area: 'Clifton',        when: 'Today', time: '9:00 PM',  duration: '60 min',  level: 'Regular', levelKey: 'regular', price: 900,  spots: 2, total: 4, hostId: 'me', playerIds: ['me'],  vibe: 'Social',             court: 'Court 1 · Outdoor',  weather: '28°C · Clear',hot: false),
+  Game(id: 'g3', club: 'Bahria Padel Arena',  area: 'Bahria Town',    when: 'Tomorrow', time: '7:00 AM',  duration: '90 min',  level: 'Regular', levelKey: 'regular', price: 800,  spots: 1, total: 4, hostId: 'me', playerIds: ['me'],  vibe: 'Practice',           court: 'Court 4 · Outdoor',  weather: '24°C · Cloudy', hot: false),
+  Game(id: 'g4', club: 'Smash Padel',         area: 'DHA Phase 6',    when: 'Saturday', time: '5:00 PM',  duration: '90 min',  level: 'Elite',   levelKey: 'elite',   price: 1400, spots: 3, total: 4, hostId: 'me', playerIds: ['me'],             vibe: 'Competitive',        court: 'Court 1 · Indoor',   weather: 'Indoor',      hot: true),
+  Game(id: 'g5', club: 'Padel Up Karachi',    area: 'DHA Phase 8',    when: 'Sunday', time: '11:00 AM', duration: '60 min',  level: 'Rookie', levelKey: 'rookie',  price: 700,  spots: 2, total: 4, hostId: 'me', playerIds: ['me'],        vibe: 'Beginner-friendly',  court: 'Court 3 · Indoor',   weather: 'Indoor',      hot: false),
+];
 
 // ─── Initial store state ──────────────────────────────────────────────────────
 const kInitialBookings    = <Booking>[];

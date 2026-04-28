@@ -4,22 +4,27 @@ import '../theme/tokens.dart';
 import 'avatar_widget.dart';
 
 class CourtDiagram extends StatelessWidget {
-  const CourtDiagram({super.key, this.players = const [], this.emptySlots = 0});
+  const CourtDiagram({
+    super.key,
+    this.slotAssignments = const {},
+    this.onClaimSlot,
+  });
 
-  final List<Player> players;
-  final int emptySlots;
+  /// slotIndex (0..3) -> Player who has claimed it.
+  final Map<int, Player> slotAssignments;
+
+  /// Tapped on an empty slot. When null, empty slots are not interactive.
+  final ValueChanged<int>? onClaimSlot;
 
   static const _positions = [
-    Alignment(-0.56, -0.64), // top-left
-    Alignment(0.56, -0.64),  // top-right
-    Alignment(-0.56, 0.64),  // bottom-left
-    Alignment(0.56, 0.64),   // bottom-right
+    Alignment(-0.56, -0.64), // 0: top-left
+    Alignment(0.56, -0.64),  // 1: top-right
+    Alignment(-0.56, 0.64),  // 2: bottom-left
+    Alignment(0.56, 0.64),   // 3: bottom-right
   ];
 
   @override
   Widget build(BuildContext context) {
-    final all = [...players, ...List<Player?>.filled((4 - players.length).clamp(0, 4), null)];
-
     return AspectRatio(
       aspectRatio: 2.0,
       child: Container(
@@ -36,22 +41,31 @@ class CourtDiagram extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           child: Stack(
             children: [
-              // Court lines SVG
               CustomPaint(painter: _CourtLinePainter(), size: Size.infinite),
-
-              // Players
-              for (int i = 0; i < all.length && i < 4; i++)
+              for (int i = 0; i < 4; i++)
                 Align(
                   alignment: _positions[i],
-                  child: all[i] != null
-                      ? AvatarWidget(player: all[i]!, size: 40, ring: true)
-                      : const EmptySlotWidget(size: 40),
+                  child: _slotAt(i),
                 ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _slotAt(int i) {
+    final p = slotAssignments[i];
+    if (p != null) {
+      return AvatarWidget(player: p, size: 40, ring: true);
+    }
+    if (onClaimSlot != null) {
+      return GestureDetector(
+        onTap: () => onClaimSlot!(i),
+        child: const EmptySlotWidget(size: 40),
+      );
+    }
+    return const EmptySlotWidget(size: 40);
   }
 }
 
@@ -68,7 +82,6 @@ class _CourtLinePainter extends CustomPainter {
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
-    // Glass walls
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(6, 6, size.width - 12, size.height - 12),
@@ -77,7 +90,6 @@ class _CourtLinePainter extends CustomPainter {
       glassPaint,
     );
 
-    // Net (vertical center line)
     final netPaint = Paint()
       ..color = AppColors.ball
       ..strokeWidth = 2.0;
@@ -87,14 +99,12 @@ class _CourtLinePainter extends CustomPainter {
       netPaint,
     );
 
-    // Service box lines (horizontal at 50%)
     canvas.drawLine(
       Offset(size.width * 0.15, size.height / 2),
       Offset(size.width * 0.85, size.height / 2),
       linePaint,
     );
 
-    // NET label
     final textPainter = TextPainter(
       text: TextSpan(
         text: 'NET',

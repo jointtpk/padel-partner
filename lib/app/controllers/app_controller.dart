@@ -1,11 +1,18 @@
-import 'package:flutter/material.dart' show Color;
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/models/booking.dart';
 import '../../core/models/friend.dart';
 import '../../core/models/game.dart';
 import '../../core/models/player.dart';
 import '../../core/mock_data.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/game_sync_service.dart';
+import '../../core/services/state_storage.dart';
 import '../../core/services/user_storage.dart';
+import '../../core/theme/tokens.dart';
 import '../routes.dart';
 
 class AppController extends GetxController {
@@ -19,6 +26,25 @@ class AppController extends GetxController {
   final friendChats  = <String, List<ChatMessage>>{}.obs;
   final hostedGames  = <Game>[].obs;
   final subscription = const Subscription(plan: 'trial', daysLeft: 23).obs;
+
+  /// Per-game court position claims: gameId -> { userId: slotIndex (0..3) }.
+  /// A user can only hold one slot per game; a slot can only hold one user.
+  final courtPositions = <String, Map<String, int>>{}.obs;
+
+  /// Claim [slot] (0..3) on [gameId] for [userId]. No-op if the slot is
+  /// already taken by someone else; otherwise releases any prior claim.
+  void claimCourtPosition(String gameId, String userId, int slot) {
+    final cur = Map<String, int>.from(courtPositions[gameId] ?? const {});
+    String? occupantId;
+    cur.forEach((k, v) {
+      if (v == slot) occupantId = k;
+    });
+    if (occupantId != null && occupantId != userId) return;
+    cur.removeWhere((k, _) => k == userId);
+    cur[userId] = slot;
+    courtPositions[gameId] = cur;
+    courtPositions.refresh();
+  }
 
   void updateCurrentUser({
     String? name,
@@ -53,6 +79,8 @@ class AppController extends GetxController {
   /// Clears all local user state and returns to the sign-up screen.
   Future<void> signOut() async {
     await UserStorage.clear();
+    await StateStorage.clearAll();
+    await AuthService.instance.signOut();
     bookings.clear();
     friends.clear();
     requests.clear();
@@ -88,6 +116,14 @@ class AppController extends GetxController {
   // Match phase for demo: 'upcoming' | 'reminder_30' | 'reminder_15' | 'finished'
   final matchPhase = 'upcoming'.obs;
 
+  /// Active Firestore listeners for hosted games' join requests, keyed by
+  /// gameId. Cleaned up if the game is ever removed.
+  final _requestSubs = <String, StreamSubscription>{};
+
+  /// Active Firestore listeners for *my* pending bookings (joiner side).
+  /// Keyed by gameId; cancelled once the booking leaves the 'pending' state.
+  final _bookingSubs = <String, StreamSubscription>{};
+
   @override
   void onInit() {
     super.onInit();
@@ -96,6 +132,134 @@ class AppController extends GetxController {
     requests.addAll(kInitialRequests);
     gameChats.addAll(kInitialGameChats);
     friendChats.addAll(kInitialFriendChats);
+    // Restore persisted gameplay state (hosted games, bookings) before
+    // wiring listeners so the watchers fire once with the rehydrated set
+    // and (re-)attach Firestore listeners for them.
+    _hydrate();
+    // Host side: listen for incoming requests on each hosted game.
+    ever<List<Game>>(hostedGames, _syncRequestSubs);
+    // Joiner side: listen for the host's approve/decline on each pending
+    // booking the user has submitted.
+    ever<List<Booking>>(bookings, _syncBookingSubs);
+    // Persist on every change so we never lose state if the app is killed.
+    ever<List<Game>>(hostedGames, (g) => StateStorage.saveHostedGames(g));
+    ever<List<Booking>>(bookings, (b) => StateStorage.saveBookings(b));
+  }
+
+  Future<void> _hydrate() async {
+    final games = await StateStorage.loadHostedGames();
+    if (games.isNotEmpty) hostedGames.addAll(games);
+    final saved = await StateStorage.loadBookings();
+    if (saved.isNotEmpty) {
+      // Avoid duplicating any bookings already loaded from kInitialBookings.
+      final knownIds = bookings.map((b) => b.gameId).toSet();
+      bookings.addAll(saved.where((b) => !knownIds.contains(b.gameId)));
+    }
+  }
+
+  /// Adds/removes Firestore request listeners to match the current
+  /// `hostedGames` set. Idempotent — safe to call as often as the list emits.
+  void _syncRequestSubs(List<Game> games) {
+    final wantIds = games.map((g) => g.id).toSet();
+    // Cancel listeners for games no longer hosted.
+    final stale = _requestSubs.keys.where((id) => !wantIds.contains(id)).toList();
+    for (final id in stale) {
+      _requestSubs.remove(id)?.cancel();
+    }
+    // Add listeners for newly-added games.
+    for (final id in wantIds) {
+      if (_requestSubs.containsKey(id)) continue;
+      _requestSubs[id] = GameSyncService.instance
+          .streamRequestsForGame(id)
+          .listen(
+            (remote) => _onRemoteRequestsChanged(id, remote),
+            onError: (e) => debugPrint('AppController request listener error: $e'),
+          );
+    }
+  }
+
+  /// Adds/removes Firestore listeners for the joiner's own request status,
+  /// one per *pending* booking. Once a booking flips to 'confirmed' (or is
+  /// removed), the listener is torn down — the watcher fires again on the
+  /// resulting `bookings` change and prunes accordingly.
+  void _syncBookingSubs(List<Booking> all) {
+    final wantIds = all
+        .where((b) => b.status == 'pending')
+        .map((b) => b.gameId)
+        .toSet();
+    final stale = _bookingSubs.keys.where((id) => !wantIds.contains(id)).toList();
+    for (final id in stale) {
+      _bookingSubs.remove(id)?.cancel();
+    }
+    for (final id in wantIds) {
+      if (_bookingSubs.containsKey(id)) continue;
+      _bookingSubs[id] = GameSyncService.instance
+          .streamMyRequestStatus(id)
+          .listen(
+            (status) => _onMyRequestStatusChanged(id, status),
+            onError: (e) => debugPrint('AppController booking listener error: $e'),
+          );
+    }
+  }
+
+  /// React to the host's decision on this device's join request.
+  void _onMyRequestStatusChanged(String gameId, String? status) {
+    if (status == 'approved') {
+      final idx = bookings.indexWhere((b) => b.gameId == gameId);
+      if (idx >= 0 && bookings[idx].status == 'pending') {
+        bookings[idx] = bookings[idx].copyWith(status: 'confirmed');
+        _toast(
+          "You're in!",
+          'The host approved your request.',
+        );
+      }
+    } else if (status == 'declined') {
+      final idx = bookings.indexWhere((b) => b.gameId == gameId);
+      if (idx >= 0 && bookings[idx].status == 'pending') {
+        bookings.removeAt(idx);
+        _toast(
+          'Request declined',
+          'The host couldn\'t fit you in this time.',
+        );
+      }
+    }
+  }
+
+  void _toast(String title, String body) {
+    Get.snackbar(
+      '',
+      '',
+      titleText: Text(title, style: AppFonts.display(14, color: AppColors.ink)),
+      messageText: Text(body,
+          style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.65))),
+      backgroundColor: AppColors.ball,
+      borderRadius: 14,
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  /// Merge Firestore-side join requests into the local `requests` map.
+  /// Existing local-only entries (other test users) are preserved by keying
+  /// on userId.
+  void _onRemoteRequestsChanged(String gameId, List<RemoteJoinRequest> remote) {
+    // Cache requester profiles so existing UI (`playerById(uid)`) renders
+    // their name / avatar without changes.
+    for (final r in remote) {
+      final p = r.playerSnapshot;
+      if (p != null) registerRemotePlayer(p);
+    }
+    // Merge: keep any local entries that aren't in the remote set; replace
+    // entries that are.
+    final remoteIds = remote.map((r) => r.userId).toSet();
+    final existing = requests[gameId] ?? const <JoinRequest>[];
+    final localOnly = existing.where((r) => !remoteIds.contains(r.userId));
+    final next = <JoinRequest>[
+      ...localOnly,
+      ...remote.map((r) => r.toLocal()),
+    ];
+    requests[gameId] = next;
+    requests.refresh();
   }
 
   // ─── Friends ───────────────────────────────────────────────────────────────
@@ -129,6 +293,12 @@ class AppController extends GetxController {
   void requestJoin(String gameId) {
     bookings.removeWhere((b) => b.gameId == gameId);
     bookings.add(Booking(gameId: gameId, status: 'pending'));
+    // Mirror to Firestore so the host (on another device) sees the request.
+    // Fire-and-forget; failures keep the local booking state intact.
+    GameSyncService.instance.requestJoin(
+      gameId: gameId,
+      joiner: currentUser.value,
+    );
   }
 
   // ─── Requests ─────────────────────────────────────────────────────────────
@@ -143,6 +313,12 @@ class AppController extends GetxController {
     // Mark booking confirmed for the user (in a real app, update Firestore)
     final idx = bookings.indexWhere((b) => b.gameId == gameId);
     if (idx >= 0) bookings[idx] = bookings[idx].copyWith(status: 'confirmed');
+    // Mirror to Firestore for cross-device requests.
+    GameSyncService.instance.updateRequestStatus(
+      gameId: gameId,
+      requesterUid: uid,
+      status: 'approved',
+    );
   }
 
   void declineJoin(String gameId, String uid) {
@@ -150,6 +326,11 @@ class AppController extends GetxController {
         .where((r) => r.userId != uid)
         .toList();
     requests.refresh();
+    GameSyncService.instance.updateRequestStatus(
+      gameId: gameId,
+      requesterUid: uid,
+      status: 'declined',
+    );
   }
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
@@ -171,6 +352,10 @@ class AppController extends GetxController {
   void addHostedGame(Game game) {
     hostedGames.add(game);
     bookings.add(Booking(gameId: game.id, status: 'hosting'));
+    // Publish to Firestore so deep-link recipients can fetch by id and
+    // submit join requests that reach this device. The `ever` watcher on
+    // hostedGames will (re-)attach the request listener.
+    GameSyncService.instance.publishGame(game);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

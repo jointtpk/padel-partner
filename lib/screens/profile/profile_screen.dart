@@ -435,7 +435,7 @@ class _StatsTab extends StatelessWidget {
     return ['Learning', 'New Player'];
   }
 
-  int _streak(Player p) => (p.wins * 0.18).round().clamp(1, 9);
+  int _streak(Player p) => (p.wins * 0.18).round().clamp(0, 9);
 }
 
 class _PerfTile extends StatelessWidget {

@@ -11,6 +11,7 @@ import '../../core/widgets/ad_banner.dart';
 import '../../core/widgets/avatar_widget.dart';
 import '../../core/widgets/ball_widget.dart';
 import '../../core/widgets/chip_widget.dart';
+import '../../core/services/deep_link_service.dart';
 import '../../core/widgets/floating_nav.dart';
 import '../../core/widgets/game_card.dart';
 import '../../core/widgets/pp_logo.dart';
@@ -445,11 +446,14 @@ class _UpcomingCard extends StatelessWidget {
                 if (isHosting && g.spots > 0) ...[
                   const SizedBox(height: 8),
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
+                      final url = await DeepLinkService.buildShareUrl(g);
                       final text =
-                          'Join my padel game at ${g.club} (${g.area}) — ${g.when} ${g.time}. '
-                          '${g.spots} spot${g.spots > 1 ? 's' : ''} open on Padel Partner.';
-                      Share.share(text);
+                          "🎾 I'm hosting a padel game at ${g.club} (${g.area}) — "
+                          "${g.when} ${g.time}. "
+                          "${g.spots} spot${g.spots > 1 ? 's' : ''} open.\n\n"
+                          "Tap to join: $url";
+                      await Share.share(text, subject: 'Join my padel game');
                     },
                     child: Container(
                       width: double.infinity,

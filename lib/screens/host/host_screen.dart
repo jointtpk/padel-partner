@@ -26,10 +26,22 @@ class HostController extends GetxController {
 
   // Step 2 – Time
   final selectedWhen = 0.obs; // index into _whenOptions
-  final selectedTime = TimeOfDay(hour: 18, minute: 0).obs;
+  final selectedTime = _nextHalfHourSlot().obs;
   final duration     = 90.obs; // minutes: 60 | 90 | 120
 
   static const whenOptions = ['Today', 'Tomorrow', 'Saturday', 'Sunday', 'Monday'];
+
+  /// Next half-hour boundary at least 30 min from now (e.g. now=5:00 PM → 5:30 PM,
+  /// now=5:31 PM → 6:30 PM). Used as a sensible default when hosting today.
+  static TimeOfDay _nextHalfHourSlot() {
+    final t = DateTime.now().add(const Duration(minutes: 30));
+    if (t.minute == 0 || t.minute == 30) {
+      return TimeOfDay(hour: t.hour, minute: t.minute);
+    }
+    if (t.minute < 30) return TimeOfDay(hour: t.hour, minute: 30);
+    final rolled = t.add(Duration(minutes: 60 - t.minute));
+    return TimeOfDay(hour: rolled.hour, minute: 0);
+  }
 
   // Step 3 – Vibe / Cost
   final vibe         = 'Social'.obs;
@@ -112,7 +124,7 @@ class HostController extends GetxController {
       id: 'g_${DateTime.now().millisecondsSinceEpoch}',
       club: clubCtrl.text.trim(),
       area: area.value,
-      when: whenLabel == 'Tomorrow' ? 'Tmrw' : whenLabel,
+      when: whenLabel,
       time: timeStr,
       duration: '${duration.value} min',
       level: levelByKey(kMe.tier).label,

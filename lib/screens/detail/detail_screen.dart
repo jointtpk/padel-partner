@@ -183,15 +183,53 @@ class _CourtSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final players = game.playerIds.map(playerById).whereType<Player>().toList();
+    final store = AppController.to;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Line-up', style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.3)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('Line-up', style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.3)),
+              const Spacer(),
+              Obx(() {
+                final me = store.currentUser.value;
+                final eligible = game.hostId == me.id ||
+                    game.playerIds.contains(me.id) ||
+                    store.getBookingStatus(game.id) == 'confirmed';
+                final hasSlot = (store.courtPositions[game.id] ?? const {}).containsKey(me.id);
+                if (!eligible || hasSlot) return const SizedBox.shrink();
+                return Text(
+                  'Tap a + to pick your spot',
+                  style: AppFonts.mono(10, color: AppColors.ink.withOpacity(0.45), letterSpacing: 0.3),
+                );
+              }),
+            ],
+          ),
           const SizedBox(height: 12),
-          CourtDiagram(players: players, emptySlots: game.spots),
+          Obx(() {
+            final me = store.currentUser.value;
+            final positions = store.courtPositions[game.id] ?? const {};
+            final assignments = <int, Player>{};
+            positions.forEach((uid, slot) {
+              final p = playerById(uid);
+              if (p != null) assignments[slot] = p;
+            });
+            final eligible = game.hostId == me.id ||
+                game.playerIds.contains(me.id) ||
+                store.getBookingStatus(game.id) == 'confirmed';
+            return CourtDiagram(
+              slotAssignments: assignments,
+              onClaimSlot: eligible
+                  ? (slot) {
+                      HapticFeedback.lightImpact();
+                      store.claimCourtPosition(game.id, me.id, slot);
+                    }
+                  : null,
+            );
+          }),
         ],
       ),
     );

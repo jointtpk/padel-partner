@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/models/friend.dart';
+import '../../core/services/billing_service.dart';
 import '../../app/controllers/app_controller.dart';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -97,6 +100,8 @@ class SubscriptionScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    const Center(child: _RestorePurchasesLink()),
                   ],
                 ],
               ),
@@ -504,30 +509,94 @@ class _UpgradeConfirmSheet extends StatefulWidget {
 
 class _UpgradeConfirmSheetState extends State<_UpgradeConfirmSheet> {
   bool _processing = false;
+  StreamSubscription<PurchaseResult>? _resultSub;
+
+  @override
+  void dispose() {
+    _resultSub?.cancel();
+    super.dispose();
+  }
 
   Future<void> _confirm() async {
     if (_processing) return;
     setState(() => _processing = true);
     HapticFeedback.mediumImpact();
-    // TODO: replace with real in_app_purchase flow once configured.
-    // For now we simulate the Google Play billing round-trip.
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    AppController.to.subscription.value =
-        const Subscription(plan: 'pro', daysLeft: 0);
+
+    final billing = BillingService.instance;
+    final iapAvailable = await billing.isAvailable();
+
+    // Dev fallback: when running without a configured store (web, emulator
+    // without a Play account, etc.) keep the simulated upgrade so the dev
+    // flow still works end-to-end.
+    if (!iapAvailable) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (!mounted) return;
+      AppController.to.subscription.value =
+          const Subscription(plan: 'pro', daysLeft: 0);
+      _onSuccess(simulated: true);
+      return;
+    }
+
+    // Real flow. The actual purchase outcome arrives asynchronously via the
+    // global purchase stream, so listen before initiating.
+    _resultSub?.cancel();
+    _resultSub = billing.results.listen((r) {
+      if (!mounted) return;
+      switch (r.kind) {
+        case PurchaseResultKind.success:
+          _onSuccess();
+          break;
+        case PurchaseResultKind.canceled:
+          setState(() => _processing = false);
+          break;
+        case PurchaseResultKind.error:
+          setState(() => _processing = false);
+          _showError(r.message ?? 'Purchase failed.');
+          break;
+      }
+    });
+
+    final started = await billing.buyPro();
+    if (!started && mounted) {
+      // buyPro emits its own error on `results`; just keep the spinner off
+      // if the listener hasn't fired yet (e.g. queryProductDetails failed
+      // before the stream).
+      setState(() => _processing = false);
+    }
+  }
+
+  void _onSuccess({bool simulated = false}) {
+    _resultSub?.cancel();
     Navigator.of(context).pop();
     Get.back();
     Get.snackbar(
       '',
       '',
-      titleText: Text("You're now on Pro! ⭐",
-          style: AppFonts.display(14, color: AppColors.ink)),
+      titleText: Text(
+        simulated ? "You're now on Pro! ⭐ (dev)" : "You're now on Pro! ⭐",
+        style: AppFonts.display(14, color: AppColors.ink),
+      ),
       messageText: Text('Enjoy unlimited access to Padel Partner.',
           style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.65))),
       backgroundColor: AppColors.ball,
       borderRadius: 14,
       margin: const EdgeInsets.all(16),
       duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _showError(String msg) {
+    Get.snackbar(
+      '',
+      '',
+      titleText: Text('Upgrade failed',
+          style: AppFonts.display(14, color: Colors.white)),
+      messageText: Text(msg,
+          style: AppFonts.body(12, color: Colors.white.withOpacity(0.85))),
+      backgroundColor: AppColors.ink,
+      borderRadius: 14,
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 4),
     );
   }
 
@@ -727,6 +796,119 @@ class _StickyUpgradeCta extends StatelessWidget {
             style: AppFonts.mono(9, color: Colors.white.withOpacity(0.30), letterSpacing: 0.2),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Restore purchases link ──────────────────────────────────────────────────
+// Required by App Store review for any non-consumable / subscription product.
+// Calls into BillingService and waits a short window for results from the
+// global purchase stream. If nothing arrives within the window we treat that
+// as "no prior purchase to restore".
+
+class _RestorePurchasesLink extends StatefulWidget {
+  const _RestorePurchasesLink();
+
+  @override
+  State<_RestorePurchasesLink> createState() => _RestorePurchasesLinkState();
+}
+
+class _RestorePurchasesLinkState extends State<_RestorePurchasesLink> {
+  bool _busy = false;
+
+  Future<void> _restore() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final billing = BillingService.instance;
+    if (!await billing.isAvailable()) {
+      if (mounted) setState(() => _busy = false);
+      _toast('In-app purchases are not available on this device.');
+      return;
+    }
+
+    // The plugin emits restored purchases through the same stream as buys.
+    // Listen for ~3s; if nothing arrives, assume there's nothing to restore.
+    StreamSubscription<PurchaseResult>? sub;
+    final completer = Completer<PurchaseResult?>();
+    sub = billing.results.listen((r) {
+      if (!completer.isCompleted) completer.complete(r);
+    });
+
+    await billing.restorePurchases();
+
+    final result = await completer.future
+        .timeout(const Duration(seconds: 3), onTimeout: () => null);
+    await sub.cancel();
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    if (result == null) {
+      _toast('No previous purchases found.');
+      return;
+    }
+    switch (result.kind) {
+      case PurchaseResultKind.success:
+        _toast('Purchases restored. Welcome back to Pro!');
+        Get.back();
+        break;
+      case PurchaseResultKind.canceled:
+        _toast('No previous purchases found.');
+        break;
+      case PurchaseResultKind.error:
+        _toast(result.message ?? 'Could not restore purchases.');
+        break;
+    }
+  }
+
+  void _toast(String msg) {
+    Get.snackbar(
+      '',
+      '',
+      titleText: Text('Restore purchases',
+          style: AppFonts.display(13, color: Colors.white)),
+      messageText: Text(msg,
+          style: AppFonts.body(12, color: Colors.white.withOpacity(0.80))),
+      backgroundColor: AppColors.ink,
+      borderRadius: 14,
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _busy ? null : _restore,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_busy) ...[
+              const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.6,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              _busy ? 'Restoring…' : 'Restore purchases',
+              style: AppFonts.body(
+                12,
+                color: Colors.white.withOpacity(_busy ? 0.45 : 0.70),
+                weight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

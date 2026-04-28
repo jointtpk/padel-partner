@@ -19,35 +19,41 @@ class AvatarWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final photo = player.photoPath;
     final hasPhoto = photo != null && photo.isNotEmpty;
+    final initials = Center(
+      child: Text(
+        player.initials,
+        style: AppFonts.display(
+          size * 0.38,
+          color: AppColors.ink,
+          letterSpacing: size * -0.007,
+        ),
+      ),
+    );
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: hasPhoto ? null : player.avatarColor,
+        color: player.avatarColor,
         border: ring ? Border.all(color: AppColors.ball, width: 2) : null,
         boxShadow: const [
           BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1)),
         ],
-        image: hasPhoto
-            ? DecorationImage(
+      ),
+      child: ClipOval(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            initials,
+            if (hasPhoto)
+              Image(
                 image: _imageProviderFor(photo),
                 fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      child: hasPhoto
-          ? null
-          : Center(
-              child: Text(
-                player.initials,
-                style: AppFonts.display(
-                  size * 0.38,
-                  color: AppColors.ink,
-                  letterSpacing: size * -0.007,
-                ),
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
-            ),
+          ],
+        ),
+      ),
     );
   }
 

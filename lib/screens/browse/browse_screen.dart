@@ -209,8 +209,8 @@ class _FilterStrip extends StatelessWidget {
   static const _levelLabels = ['All', 'Rookie', 'Amateur', 'Regular', 'Pro', 'Elite'];
   static const _vibes       = ['all', 'competitive', 'social', 'practice', 'beginner-friendly'];
   static const _vibeLabels  = ['All', 'Competitive', 'Social', 'Practice', 'Beginner'];
-  static const _whens       = ['all', 'today', 'tmrw', 'sat', 'sun'];
-  static const _whenLabels  = ['Any', 'Today', 'Tomorrow', 'Saturday', 'Sunday'];
+  static const _whens       = ['all', 'today', 'tomorrow', 'saturday', 'sunday', 'monday'];
+  static const _whenLabels  = ['Any', 'Today', 'Tomorrow', 'Saturday', 'Sunday', 'Monday'];
   static const _areas       = ['all', 'DHA Phase 8', 'DHA Phase 6', 'Clifton', 'Bahria Town', 'PECHS'];
   static const _areaLabels  = ['Any', 'DHA Ph.8', 'DHA Ph.6', 'Clifton', 'Bahria', 'PECHS'];
 

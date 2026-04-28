@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/email_otp_service.dart';
 
 class SignUpController extends GetxController {
@@ -79,6 +82,10 @@ class SignUpController extends GetxController {
       step.value++;
     } else {
       _saveProfile();
+      // Mint a Firebase UID so Firestore writes are server-verifiable.
+      // Best-effort — failure here doesn't block sign-up; the app falls
+      // back to the per-install UUID for sync.
+      unawaited(AuthService.instance.ensureSignedIn());
       Get.offAllNamed(Routes.home);
     }
   }

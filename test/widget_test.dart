@@ -9,11 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:padel_partner/main.dart';
+import 'package:padel_partner/app/routes.dart';
 
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const PadelPartnerApp());
+    await tester.pumpWidget(const PadelPartnerApp(initialRoute: Routes.signUp));
 
     // Verify that the app builds without errors.
     expect(find.byType(PadelPartnerApp), findsOneWidget);
