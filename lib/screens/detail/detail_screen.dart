@@ -329,21 +329,37 @@ class _PlayersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Resolve each id in playerIds to a Player. The host's id is `'me'`
-    // (legacy local-only id), which on the joiner's device would resolve to
-    // the joiner's own kMe — wrong. Prefer the embedded hostSnapshot for
-    // the host slot.
-    final players = <Player>[];
+    // Resolve each id in `game.playerIds`, taking three identity types
+    // into account:
+    //   * `'me'`         — the host slot (legacy local id). Use the
+    //                      embedded hostSnapshot when available so non-host
+    //                      viewers see the right person; otherwise only
+    //                      use kMe if *we* are the local host.
+    //   * our own uid    — the joiner viewing their own slot. Use kMe.
+    //   * any other uid  — look up via kRemotePlayers (populated by the
+    //                      host's request listener).
+    final myUid = IdentityService.instance.cached;
+    final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
+    // List of (player, isHost, isMe) records so the row can correctly
+    // tag the HOST badge using the *source* id, not the resolved player's
+    // own id (which is `'me'` for both host-slot and self-slot rendering).
+    final rows = <({Player player, bool isHost, bool isMe})>[];
     for (final id in game.playerIds) {
+      final isHostSlot = id == game.hostId;
+      final isMeSlot = id == myUid;
       Player? p;
-      if (id == game.hostId && game.hostSnapshot != null) {
-        p = game.hostSnapshot;
+      if (isHostSlot) {
+        p = game.hostSnapshot ?? (amLocalHost ? store.currentUser.value : null);
+      } else if (isMeSlot) {
+        p = store.currentUser.value;
       } else {
         p = playerById(id);
       }
-      if (p != null) players.add(p);
+      if (p != null) {
+        rows.add((player: p, isHost: isHostSlot, isMe: isMeSlot || (isHostSlot && amLocalHost)));
+      }
     }
-    final emptyCount = game.total - players.length;
+    final emptyCount = game.total - rows.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
@@ -352,13 +368,18 @@ class _PlayersSection extends StatelessWidget {
         children: [
           Text('Players', style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.3)),
           const SizedBox(height: 12),
-          ...players.map((p) => Padding(
+          ...rows.map((r) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _PlayerRow(player: p, isHost: p.id == game.hostId, store: store),
+            child: _PlayerRow(
+              player: r.player,
+              isHost: r.isHost,
+              isMeOverride: r.isMe,
+              store: store,
+            ),
           )),
           ...List.generate(emptyCount, (i) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _EmptyPlayerRow(number: players.length + i + 1),
+            child: _EmptyPlayerRow(number: rows.length + i + 1),
           )),
         ],
       ),
@@ -367,14 +388,23 @@ class _PlayersSection extends StatelessWidget {
 }
 
 class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({required this.player, required this.isHost, required this.store});
+  const _PlayerRow({
+    required this.player,
+    required this.isHost,
+    required this.store,
+    this.isMeOverride = false,
+  });
   final Player player;
   final bool isHost;
   final AppController store;
+  /// Override for "is this me?" decided by the caller using the slot id.
+  /// We can't infer it from `player.id == kMe.id` because both the host
+  /// slot and the self slot resolve to a Player with `id == 'me'`.
+  final bool isMeOverride;
 
   @override
   Widget build(BuildContext context) {
-    final isMe = player.id == kMe.id;
+    final isMe = isMeOverride;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -522,9 +552,12 @@ class _HostSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Prefer the host snapshot embedded in the game (correct on any device).
-    // Only fall back to playerById when there is no snapshot — that path is
-    // safe for locally-stored legacy games where the user *is* the host.
-    final host = game.hostSnapshot ?? playerById(game.hostId);
+    // Only fall back to local kMe when *we* are the host of this game —
+    // never use `playerById(hostId)` blindly because hostId is `'me'` for
+    // every game and would falsely show the joiner's profile as the host
+    // on legacy games that lack a snapshot.
+    final amLocalHost = store.hostedGames.any((g) => g.id == game.id);
+    final host = game.hostSnapshot ?? (amLocalHost ? store.currentUser.value : null);
     if (host == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
@@ -577,7 +610,7 @@ class _HostSection extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (host.id != kMe.id)
+                if (!amLocalHost)
                   Obx(() {
                     final status = store.getFriendStatus(host.id);
                     return _FriendBtn(uid: host.id, status: status, store: store);

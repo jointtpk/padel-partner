@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/mock_data.dart' show kPkAreas;
 import '../../core/models/game.dart';
-import '../../core/services/game_sync_service.dart';
 import '../../core/widgets/game_card.dart';
 import '../../core/widgets/floating_nav.dart';
 import '../../app/routes.dart' show Routes;
@@ -20,36 +17,21 @@ class BrowseController extends GetxController {
   final selectedArea  = 'all'.obs;
   final searchQuery   = ''.obs;
 
-  /// Games published to Firestore from any device (this one or others).
-  final remoteGames = <Game>[].obs;
-  StreamSubscription<List<Game>>? _gamesSub;
-
   final searchCtrl = TextEditingController();
 
   @override
-  void onInit() {
-    super.onInit();
-    // Live feed of all games from Firestore. Falls back to an empty stream
-    // when Firestore isn't available — in that case the browse list will
-    // only show this user's own hosted games.
-    _gamesSub = GameSyncService.instance
-        .streamAllGames()
-        .listen((games) => remoteGames.assignAll(games));
-  }
-
-  @override
   void onClose() {
-    _gamesSub?.cancel();
     searchCtrl.dispose();
     super.onClose();
   }
 
-  /// Merged pool: Firestore-side games + this device's locally-hosted games,
-  /// deduplicated by id (a host's own game appears in both — local takes
-  /// priority since it's the authoritative copy on this device).
+  /// Merged pool: Firestore-side games (shared from AppController) + this
+  /// device's locally-hosted games, deduplicated by id (a host's own game
+  /// appears in both — local takes priority since it's the authoritative
+  /// copy on this device).
   List<Game> get pool {
     final byId = <String, Game>{};
-    for (final g in remoteGames) {
+    for (final g in AppController.to.remoteGames) {
       byId[g.id] = g;
     }
     for (final g in AppController.to.hostedGames) {

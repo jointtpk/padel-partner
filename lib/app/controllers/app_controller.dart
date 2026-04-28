@@ -28,6 +28,12 @@ class AppController extends GetxController {
   final hostedGames  = <Game>[].obs;
   final subscription = const Subscription(plan: 'trial', daysLeft: 23).obs;
 
+  /// Live feed of all games published to Firestore (from any device).
+  /// Used by home's "Open courts" and the browse screen so games hosted
+  /// elsewhere are discoverable. Empty when Firestore is unavailable.
+  final remoteGames = <Game>[].obs;
+  StreamSubscription<List<Game>>? _remoteGamesSub;
+
   /// Per-game court position claims: gameId -> { userId: slotIndex (0..3) }.
   /// A user can only hold one slot per game; a slot can only hold one user.
   final courtPositions = <String, Map<String, int>>{}.obs;
@@ -152,6 +158,10 @@ class AppController extends GetxController {
     ever<Subscription>(subscription, _syncProBadge);
     // Apply the initial value too in case sub starts as Pro (e.g. restored).
     _syncProBadge(subscription.value);
+    // Live Firestore games feed (shared by home + browse).
+    _remoteGamesSub = GameSyncService.instance
+        .streamAllGames()
+        .listen((games) => remoteGames.assignAll(games));
   }
 
   void _syncProBadge(Subscription sub) {
@@ -171,6 +181,21 @@ class AppController extends GetxController {
       // Avoid duplicating any bookings already loaded from kInitialBookings.
       final knownIds = bookings.map((b) => b.gameId).toSet();
       bookings.addAll(saved.where((b) => !knownIds.contains(b.gameId)));
+    }
+    // Backfill: legacy games persisted before hostUid/hostSnapshot existed
+    // would otherwise show the wrong host on joiner devices. Stamp the
+    // current values now and republish so Firestore catches up.
+    final uid = IdentityService.instance.cached;
+    final me = currentUser.value;
+    for (var i = 0; i < hostedGames.length; i++) {
+      final g = hostedGames[i];
+      if (g.hostUid != null && g.hostSnapshot != null) continue;
+      final patched = g.copyWith(
+        hostUid: g.hostUid ?? uid,
+        hostSnapshot: g.hostSnapshot ?? me,
+      );
+      hostedGames[i] = patched;
+      GameSyncService.instance.publishGame(patched);
     }
   }
 
@@ -260,11 +285,13 @@ class AppController extends GetxController {
   /// Existing local-only entries (other test users) are preserved by keying
   /// on userId.
   void _onRemoteRequestsChanged(String gameId, List<RemoteJoinRequest> remote) {
-    // Cache requester profiles so existing UI (`playerById(uid)`) renders
-    // their name / avatar without changes.
+    // Cache requester profiles keyed by their cross-device userId so
+    // `playerById(uid)` resolves them. The snapshot's own `id` is `'me'`
+    // (the joiner's local kMe.id) and would collide with the host's own
+    // kMe — so we re-stamp it with the requester's uid before registering.
     for (final r in remote) {
       final p = r.playerSnapshot;
-      if (p != null) registerRemotePlayer(p);
+      if (p != null) registerRemotePlayer(p.copyWith(id: r.userId));
     }
     // Merge: keep any local entries that aren't in the remote set; replace
     // entries that are.
@@ -330,6 +357,22 @@ class AppController extends GetxController {
     // Mark booking confirmed for the user (in a real app, update Firestore)
     final idx = bookings.indexWhere((b) => b.gameId == gameId);
     if (idx >= 0) bookings[idx] = bookings[idx].copyWith(status: 'confirmed');
+    // Add the approved joiner to the game's playerIds + decrement spots so
+    // both the host's own UI and any remote viewer's UI see the player
+    // appear in the line-up. Republishes the game so Firestore picks up
+    // the change for cross-device sync.
+    final gi = hostedGames.indexWhere((g) => g.id == gameId);
+    if (gi >= 0) {
+      final g = hostedGames[gi];
+      if (!g.playerIds.contains(uid)) {
+        final next = g.copyWith(
+          playerIds: [...g.playerIds, uid],
+          spots: (g.spots - 1).clamp(0, g.total),
+        );
+        hostedGames[gi] = next;
+        GameSyncService.instance.publishGame(next);
+      }
+    }
     // Mirror to Firestore for cross-device requests.
     GameSyncService.instance.updateRequestStatus(
       gameId: gameId,
@@ -409,8 +452,8 @@ class AppController extends GetxController {
     final booked = bookings
         .where((b) => b.status == 'confirmed')
         .map((b) {
-          final g = kGames.firstWhereOrNull((g) => g.id == b.gameId) ??
-              hostedGames.firstWhereOrNull((g) => g.id == b.gameId);
+          final g = hostedGames.firstWhereOrNull((g) => g.id == b.gameId) ??
+              remoteGames.firstWhereOrNull((g) => g.id == b.gameId);
           return g != null ? (game: g, status: b.status) : null;
         })
         .whereType<({Game game, String status})>()

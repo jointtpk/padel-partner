@@ -339,8 +339,11 @@ class _UpcomingSection extends StatelessWidget {
 
     final items = <_UpcomingItem>[];
     for (final b in store.bookings) {
-      final g = kGames.firstWhereOrNull((g) => g.id == b.gameId) ??
-          store.hostedGames.firstWhereOrNull((g) => g.id == b.gameId);
+      // Resolve the game across all known sources: locally hosted (this
+      // user's own games) and remote (Firestore-streamed games — needed
+      // when the user is a joiner of someone else's hosted game).
+      final g = store.hostedGames.firstWhereOrNull((g) => g.id == b.gameId) ??
+          store.remoteGames.firstWhereOrNull((g) => g.id == b.gameId);
       if (g != null) items.add(_UpcomingItem(game: g, status: b.status));
     }
     for (final g in store.hostedGames) {
@@ -643,13 +646,17 @@ class _FeedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Filter out games the user has already booked or is hosting themselves
+      // Build the feed from:
+      //   1. Own hosted games that aren't already in a booking row above.
+      //   2. Games discovered via Firestore (other hosts) — deduplicated
+      //      against the local list and against games the user has
+      //      already booked or is hosting themselves.
       final bookedIds = store.bookings.map((b) => b.gameId).toSet();
-      final myId = store.currentUser.value.id;
+      final hostedIds = store.hostedGames.map((g) => g.id).toSet();
       final feed = <Game>[
-        ...kGames.where((g) => !bookedIds.contains(g.id)),
-        ...store.hostedGames.where((g) =>
-            g.hostId != myId && !bookedIds.contains(g.id)),
+        ...store.hostedGames.where((g) => !bookedIds.contains(g.id)),
+        ...store.remoteGames.where((g) =>
+            !hostedIds.contains(g.id) && !bookedIds.contains(g.id)),
       ];
 
       return Column(
@@ -719,10 +726,8 @@ class _FeedSection extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (store.subscription.value.plan != 'pro') ...[
-                    const SizedBox(height: 12),
-                    const AdBanner(variant: 'court'),
-                  ],
+                  // Court-booking promo hidden until partner integrations
+                  // exist — the BOOK button has no destination yet.
                 ],
               ),
             )
@@ -738,10 +743,6 @@ class _FeedSection extends StatelessWidget {
                       onTap: () => Get.toNamed(Routes.detail, arguments: g),
                     ),
                   )),
-                  if (store.subscription.value.plan != 'pro') ...[
-                    const AdBanner(variant: 'court'),
-                    const SizedBox(height: 12),
-                  ],
                   ...feed.skip(2).map((g) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: GameCard(
