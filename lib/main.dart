@@ -22,13 +22,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ── Firebase ──────────────────────────────────────────────────────────────
-  // Skip Firebase initialization on web; only for mobile
-  if (!kIsWeb) {
-    try {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    } catch (e) {
-      debugPrint('Firebase init error: $e');
-    }
+  // Initialise on every platform that has options configured (Android + Web
+  // today; iOS/macOS still throw `UnsupportedError`).
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    debugPrint('Firebase init error: $e');
   }
 
   // ── System UI ─────────────────────────────────────────────────────────────

@@ -48,7 +48,7 @@ class GameSyncService {
     }
   }
 
-  bool get _enabled => _firestore != null && !kIsWeb;
+  bool get _enabled => _firestore != null;
 
   /// Publish a hosted [game] to Firestore. Returns true on success — used by
   /// the share-link builder to decide between a short URL and the embedded

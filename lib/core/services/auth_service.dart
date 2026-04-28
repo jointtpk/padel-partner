@@ -28,17 +28,13 @@ class AuthService {
 
   /// The current Firebase UID, or null if not signed in / Firebase
   /// unavailable. Synchronous — call after [ensureSignedIn] to get a value.
-  String? get uid {
-    if (kIsWeb) return null; // we don't ship Firebase on web
-    return _auth?.currentUser?.uid;
-  }
+  String? get uid => _auth?.currentUser?.uid;
 
   /// Idempotently ensures there is a signed-in Firebase user. If one
   /// already exists, returns its UID; otherwise signs in anonymously.
   /// Returns null on any failure — caller must treat null as "no Firebase
   /// identity, use IdentityService fallback".
   Future<String?> ensureSignedIn() async {
-    if (kIsWeb) return null;
     final auth = _auth;
     if (auth == null) return null;
     try {
@@ -53,7 +49,6 @@ class AuthService {
 
   /// Signs out the current Firebase user. Used by [AppController.signOut].
   Future<void> signOut() async {
-    if (kIsWeb) return;
     try {
       await _auth?.signOut();
     } catch (e) {
