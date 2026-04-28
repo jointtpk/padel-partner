@@ -144,6 +144,22 @@ class AppController extends GetxController {
     // Persist on every change so we never lose state if the app is killed.
     ever<List<Game>>(hostedGames, (g) => StateStorage.saveHostedGames(g));
     ever<List<Booking>>(bookings, (b) => StateStorage.saveBookings(b));
+    // Mirror Pro subscription state onto the current user's player profile
+    // so the gold verified tick is reflected wherever Player is rendered
+    // (own profile, host card, request rows on other devices via the
+    // playerSnapshot).
+    ever<Subscription>(subscription, _syncProBadge);
+    // Apply the initial value too in case sub starts as Pro (e.g. restored).
+    _syncProBadge(subscription.value);
+  }
+
+  void _syncProBadge(Subscription sub) {
+    final isPro = sub.plan == 'pro';
+    if (currentUser.value.isPro == isPro) return;
+    final next = currentUser.value.copyWith(isPro: isPro);
+    currentUser.value = next;
+    kMe = next;
+    UserStorage.save(next);
   }
 
   Future<void> _hydrate() async {
@@ -356,6 +372,17 @@ class AppController extends GetxController {
     // submit join requests that reach this device. The `ever` watcher on
     // hostedGames will (re-)attach the request listener.
     GameSyncService.instance.publishGame(game);
+  }
+
+  /// Replace a hosted game with an edited copy and republish it. Caller is
+  /// responsible for only invoking this while no joiner has been confirmed
+  /// yet — once a joiner is in, edits would change the deal under their
+  /// feet. The detail-screen edit button enforces that gate.
+  void updateHostedGame(Game updated) {
+    final i = hostedGames.indexWhere((g) => g.id == updated.id);
+    if (i < 0) return;
+    hostedGames[i] = updated;
+    GameSyncService.instance.publishGame(updated);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

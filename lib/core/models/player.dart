@@ -19,6 +19,7 @@ class Player {
     this.bio,
     this.photoPath,
     this.tags = const {},
+    this.isPro = false,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class Player {
   final String? bio;
   final String? photoPath;
   final Map<String, String> tags;
+  /// True when this user holds an active Pro subscription. Used to render
+  /// the gold verified tick next to their name and avatar.
+  final bool isPro;
 
   double get winRate => games > 0 ? wins / games : 0;
 
@@ -59,6 +63,7 @@ class Player {
     String? bio,
     String? photoPath,
     Map<String, String>? tags,
+    bool? isPro,
   }) =>
       Player(
         id: id ?? this.id,
@@ -78,6 +83,7 @@ class Player {
         bio: bio ?? this.bio,
         photoPath: photoPath ?? this.photoPath,
         tags: tags ?? this.tags,
+        isPro: isPro ?? this.isPro,
       );
 
   Map<String, dynamic> toMap() => {
@@ -98,6 +104,7 @@ class Player {
         'bio': bio,
         'photoPath': photoPath,
         'tags': tags,
+        'isPro': isPro,
       };
 
   factory Player.fromMap(Map<String, dynamic> m) => Player(
@@ -118,5 +125,6 @@ class Player {
         bio: m['bio'] as String?,
         photoPath: m['photoPath'] as String?,
         tags: (m['tags'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? const {},
+        isPro: m['isPro'] as bool? ?? false,
       );
 }

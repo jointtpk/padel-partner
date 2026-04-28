@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/mock_data.dart';
 import '../../core/models/game.dart';
+import '../../core/services/game_sync_service.dart';
 import '../../core/widgets/game_card.dart';
 import '../../core/widgets/floating_nav.dart';
 import '../../app/routes.dart' show Routes;
@@ -17,33 +19,50 @@ class BrowseController extends GetxController {
   final selectedArea  = 'all'.obs;
   final searchQuery   = ''.obs;
 
+  /// Games published to Firestore from any device (this one or others).
+  final remoteGames = <Game>[].obs;
+  StreamSubscription<List<Game>>? _gamesSub;
+
   final searchCtrl = TextEditingController();
 
   @override
+  void onInit() {
+    super.onInit();
+    // Live feed of all games from Firestore. Falls back to an empty stream
+    // when Firestore isn't available — in that case the browse list will
+    // only show this user's own hosted games.
+    _gamesSub = GameSyncService.instance
+        .streamAllGames()
+        .listen((games) => remoteGames.assignAll(games));
+  }
+
+  @override
   void onClose() {
+    _gamesSub?.cancel();
     searchCtrl.dispose();
     super.onClose();
   }
 
+  /// Merged pool: Firestore-side games + this device's locally-hosted games,
+  /// deduplicated by id (a host's own game appears in both — local takes
+  /// priority since it's the authoritative copy on this device).
+  List<Game> get pool {
+    final byId = <String, Game>{};
+    for (final g in remoteGames) {
+      byId[g.id] = g;
+    }
+    for (final g in AppController.to.hostedGames) {
+      byId[g.id] = g;
+    }
+    return byId.values.toList();
+  }
+
   List<Game> get filtered {
-    // Touch all reactive deps unconditionally so Obx subscribes even when
-    // the source list is empty (otherwise predicate body never runs).
     final lvl  = selectedLevel.value;
     final vib  = selectedVibe.value;
     final wh   = selectedWhen.value;
     final ar   = selectedArea.value;
     final q    = searchQuery.value.toLowerCase();
-
-    final store = AppController.to;
-    // Touch hostedGames length so Obx subscribes.
-    // ignore: unused_local_variable
-    final hostedLen = store.hostedGames.length;
-    // Combine seeded games + all hosted games (own listings appear too,
-    // useful for verifying a publish and for previewing to friends).
-    final pool = <Game>[
-      ...kGames,
-      ...store.hostedGames,
-    ];
 
     return pool.where((g) {
       if (lvl != 'all' && g.levelKey != lvl) return false;
@@ -209,10 +228,8 @@ class _FilterStrip extends StatelessWidget {
   static const _levelLabels = ['All', 'Rookie', 'Amateur', 'Regular', 'Pro', 'Elite'];
   static const _vibes       = ['all', 'competitive', 'social', 'practice', 'beginner-friendly'];
   static const _vibeLabels  = ['All', 'Competitive', 'Social', 'Practice', 'Beginner'];
-  static const _whens       = ['all', 'today', 'tomorrow', 'saturday', 'sunday', 'monday'];
-  static const _whenLabels  = ['Any', 'Today', 'Tomorrow', 'Saturday', 'Sunday', 'Monday'];
-  static const _areas       = ['all', 'DHA Phase 8', 'DHA Phase 6', 'Clifton', 'Bahria Town', 'PECHS'];
-  static const _areaLabels  = ['Any', 'DHA Ph.8', 'DHA Ph.6', 'Clifton', 'Bahria', 'PECHS'];
+  static const _whens       = ['all', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  static const _whenLabels  = ['Any', 'Today', 'Tomorrow', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   Widget build(BuildContext context) {
@@ -223,12 +240,37 @@ class _FilterStrip extends StatelessWidget {
           _FilterRow(label: 'LEVEL', values: _levels, labels: _levelLabels, selected: ctrl.selectedLevel),
           _FilterRow(label: 'VIBE',  values: _vibes,  labels: _vibeLabels,  selected: ctrl.selectedVibe),
           _FilterRow(label: 'WHEN',  values: _whens,  labels: _whenLabels,  selected: ctrl.selectedWhen),
-          _FilterRow(label: 'AREA',  values: _areas,  labels: _areaLabels,  selected: ctrl.selectedArea),
+          // Area filter is built dynamically from the games actually in the
+          // pool — no point showing chips for areas with zero games, and the
+          // app supports any area users type during hosting.
+          Obx(() {
+            final areas = <String>{};
+            for (final g in ctrl.pool) {
+              if (g.area.trim().isNotEmpty) areas.add(g.area);
+            }
+            final sorted = areas.toList()..sort();
+            final values = ['all', ...sorted];
+            final labels = ['Any', ...sorted.map(_shortenArea)];
+            return _FilterRow(
+              label: 'AREA',
+              values: values,
+              labels: labels,
+              selected: ctrl.selectedArea,
+            );
+          }),
           Container(height: 1, color: Colors.white.withOpacity(0.08)),
         ],
       ),
     );
   }
+
+  /// Compact a long area name so it fits the chip without overflowing.
+  static String _shortenArea(String s) => s
+      .replaceAll('DHA Phase ', 'DHA Ph.')
+      .replaceAll('Bahria Town', 'Bahria')
+      .replaceAll(' Karachi', '')
+      .replaceAll(' Lahore', '')
+      .replaceAll(' Islamabad', '');
 }
 
 class _FilterRow extends StatelessWidget {

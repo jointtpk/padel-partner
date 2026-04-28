@@ -7,6 +7,7 @@ import '../../core/models/game.dart';
 import '../../core/widgets/avatar_widget.dart';
 import '../../core/widgets/chip_widget.dart';
 import '../../core/widgets/game_card.dart';
+import '../../core/widgets/verified_tick.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart' show Routes;
 
@@ -158,7 +159,17 @@ class _ProfileHeaderSliver extends StatelessWidget {
             // Avatar + name
             AvatarWidget(player: player, size: 80, ring: true),
             const SizedBox(height: 14),
-            Text(player.name, style: AppFonts.display(26, color: Colors.white, letterSpacing: -0.5)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(player.name, style: AppFonts.display(26, color: Colors.white, letterSpacing: -0.5)),
+                if (player.isPro) ...[
+                  const SizedBox(width: 8),
+                  const VerifiedTick(size: 20),
+                ],
+              ],
+            ),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -549,7 +560,19 @@ class _PartnersTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(p.name, style: AppFonts.body(14, color: AppColors.ink, weight: FontWeight.w700)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(p.name,
+                              style: AppFonts.body(14, color: AppColors.ink, weight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (p.isPro) ...[
+                          const SizedBox(width: 5),
+                          const VerifiedTick(size: 13),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 3),
                     Row(
                       children: [

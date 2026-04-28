@@ -4,10 +4,12 @@ import 'package:get/get.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/mock_data.dart';
 import '../../core/models/game.dart';
+import '../../core/models/game_time.dart';
 import '../../core/models/player.dart';
 import '../../core/widgets/avatar_widget.dart';
 import '../../core/widgets/chip_widget.dart';
 import '../../core/widgets/court_diagram.dart';
+import '../../core/widgets/verified_tick.dart';
 import '../../app/controllers/app_controller.dart';
 import '../../app/routes.dart' show Routes;
 
@@ -369,6 +371,10 @@ class _PlayerRow extends StatelessWidget {
                 Row(
                   children: [
                     Text(player.name, style: AppFonts.body(14, color: AppColors.ink, weight: FontWeight.w600)),
+                    if (player.isPro) ...[
+                      const SizedBox(width: 5),
+                      const VerifiedTick(size: 13),
+                    ],
                     const SizedBox(width: 6),
                     if (isHost)
                       Container(
@@ -517,7 +523,19 @@ class _HostSection extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(host.name, style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.2)),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(host.name,
+                                style: AppFonts.display(16, color: AppColors.ink, letterSpacing: -0.2),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          if (host.isPro) ...[
+                            const SizedBox(width: 6),
+                            const VerifiedTick(size: 14),
+                          ],
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(host.handle, style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.50))),
                       const SizedBox(height: 6),
@@ -600,10 +618,28 @@ class _StickyCtaBar extends StatelessWidget {
   }
 
   Widget _ctaContent(String status, bool isHosting) {
+    final hasStarted = GameTime.hasStarted(game);
+
     if (isHosting) {
+      // The host can still edit the game while no other player has joined
+      // (i.e. only their own id is in playerIds). Locking edits the moment
+      // someone else is in keeps the deal honest for joiners.
+      final canEdit = !hasStarted && game.playerIds.length <= 1;
       return Row(
         children: [
+          if (canEdit) ...[
+            Expanded(
+              child: _CtaBtn(
+                label: 'Edit',
+                color: AppColors.mist,
+                textColor: AppColors.ink,
+                onTap: () => _openEditSheet(),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
+            flex: canEdit ? 2 : 3,
             child: _CtaBtn(
               label: 'Manage requests',
               color: AppColors.ink,
@@ -619,6 +655,15 @@ class _StickyCtaBar extends StatelessWidget {
             onTap: () => Get.toNamed(Routes.chat, arguments: {'gameId': game.id, 'title': game.club}),
           ),
         ],
+      );
+    }
+
+    // Joiners can't request to join after the start time has passed.
+    // Confirmed bookings still get the chat shortcut.
+    if (hasStarted && status != 'confirmed') {
+      return _StaticBanner(
+        title: 'Game has already started',
+        body: 'You can no longer request to join.',
       );
     }
 
@@ -689,6 +734,14 @@ class _StickyCtaBar extends StatelessWidget {
         );
     }
   }
+
+  void _openEditSheet() {
+    Get.bottomSheet(
+      _EditGameSheet(game: game),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+    );
+  }
 }
 
 class _CtaBtn extends StatelessWidget {
@@ -720,6 +773,417 @@ class _CtaBtn extends StatelessWidget {
         child: Center(
           child: Text(label, style: AppFonts.body(15, color: textColor, weight: FontWeight.w700)),
         ),
+      ),
+    );
+  }
+}
+
+class _StaticBanner extends StatelessWidget {
+  const _StaticBanner({required this.title, required this.body});
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.mist,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(title,
+              style: AppFonts.display(15, color: AppColors.ink, letterSpacing: -0.2)),
+          const SizedBox(height: 2),
+          Text(body,
+              style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.55))),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Edit game sheet ─────────────────────────────────────────────────────────
+// Lets the host change the most-likely-to-need-changing fields while no
+// joiner has confirmed yet. Court / area / vibe / spots are kept editable;
+// club name and weather are not (those rarely change post-publish).
+
+class _EditGameSheet extends StatefulWidget {
+  const _EditGameSheet({required this.game});
+  final Game game;
+
+  @override
+  State<_EditGameSheet> createState() => _EditGameSheetState();
+}
+
+class _EditGameSheetState extends State<_EditGameSheet> {
+  static const _whens = ['Today', 'Tomorrow', 'Saturday', 'Sunday', 'Monday'];
+  static const _vibes = ['Social', 'Competitive', 'Practice', 'Beginner-friendly'];
+  static const _durations = [60, 90, 120];
+
+  late String _when;
+  late TimeOfDay _time;
+  late int _duration;
+  late int _spots;
+  late String _vibe;
+  late TextEditingController _totalCtrl;
+
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _when = _whens.firstWhere(
+      (w) => w.toLowerCase() == widget.game.when.toLowerCase(),
+      orElse: () => 'Today',
+    );
+    _time = _parseTime(widget.game.time);
+    _duration = int.tryParse(
+            RegExp(r'\d+').firstMatch(widget.game.duration)?.group(0) ?? '') ??
+        60;
+    _spots = widget.game.spots > 0 ? widget.game.spots : 1;
+    _vibe = _vibes.firstWhere(
+      (v) => v.toLowerCase() == widget.game.vibe.toLowerCase(),
+      orElse: () => 'Social',
+    );
+    _totalCtrl = TextEditingController(
+        text: (widget.game.totalCost ?? 0) > 0
+            ? widget.game.totalCost.toString()
+            : '');
+  }
+
+  @override
+  void dispose() {
+    _totalCtrl.dispose();
+    super.dispose();
+  }
+
+  TimeOfDay _parseTime(String s) {
+    final m = RegExp(r'^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$').firstMatch(s.trim());
+    if (m == null) return const TimeOfDay(hour: 18, minute: 0);
+    var h = int.parse(m.group(1)!);
+    final mm = int.parse(m.group(2)!);
+    final period = m.group(3)!.toUpperCase();
+    if (period == 'PM' && h < 12) h += 12;
+    if (period == 'AM' && h == 12) h = 0;
+    return TimeOfDay(hour: h, minute: mm);
+  }
+
+  String _formatTime(TimeOfDay t) {
+    final h12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final m = t.minute.toString().padLeft(2, '0');
+    final period = t.hour >= 12 ? 'PM' : 'AM';
+    return '$h12:$m $period';
+  }
+
+  int get _pricePerHead {
+    final t = int.tryParse(_totalCtrl.text) ?? 0;
+    final heads = _spots + 1;
+    if (heads == 0) return 0;
+    return (t / heads).ceil();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    HapticFeedback.lightImpact();
+    final updated = widget.game.copyWith(
+      when: _when,
+      time: _formatTime(_time),
+      duration: '$_duration min',
+      spots: _spots,
+      total: _spots + 1,
+      vibe: _vibe,
+      price: _pricePerHead,
+      totalCost: int.tryParse(_totalCtrl.text) ?? widget.game.totalCost,
+    );
+    AppController.to.updateHostedGame(updated);
+    if (mounted) Navigator.of(context).pop();
+    Get.snackbar(
+      '',
+      '',
+      titleText: Text('Game updated', style: AppFonts.display(14, color: AppColors.ink)),
+      messageText: Text('Your changes are saved.',
+          style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.65))),
+      backgroundColor: AppColors.ball,
+      borderRadius: 14,
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.86,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.paper,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.ink.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  Text('Edit game', style: AppFonts.display(20, color: AppColors.ink, letterSpacing: -0.4)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Icon(Icons.close_rounded, color: AppColors.ink.withOpacity(0.50)),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Day'),
+                    const SizedBox(height: 8),
+                    _Pills<String>(
+                      values: _whens,
+                      labels: _whens,
+                      selected: _when,
+                      onTap: (v) => setState(() => _when = v),
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Start time'),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: _time,
+                        );
+                        if (picked != null) setState(() => _time = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.line),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(_formatTime(_time),
+                                style: AppFonts.display(20, color: AppColors.ink, letterSpacing: -0.3)),
+                            const Spacer(),
+                            Icon(Icons.access_time_rounded, color: AppColors.ink.withOpacity(0.40)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Duration'),
+                    const SizedBox(height: 8),
+                    _Pills<int>(
+                      values: _durations,
+                      labels: _durations.map((d) => '$d min').toList(),
+                      selected: _duration,
+                      onTap: (v) => setState(() => _duration = v),
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Vibe'),
+                    const SizedBox(height: 8),
+                    _Pills<String>(
+                      values: _vibes,
+                      labels: const ['Social', 'Competitive', 'Practice', 'Beginner'],
+                      selected: _vibe,
+                      onTap: (v) => setState(() => _vibe = v),
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Open spots (excluding you)'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _StepBtn(
+                          icon: Icons.remove_rounded,
+                          onTap: () {
+                            if (_spots > 1) setState(() => _spots--);
+                          },
+                        ),
+                        const SizedBox(width: 18),
+                        Text('$_spots', style: AppFonts.display(28, color: AppColors.ink)),
+                        const SizedBox(width: 18),
+                        _StepBtn(
+                          icon: Icons.add_rounded,
+                          onTap: () {
+                            if (_spots < 3) setState(() => _spots++);
+                          },
+                        ),
+                        const SizedBox(width: 14),
+                        Text('${_spots + 1} players total',
+                            style: AppFonts.body(12, color: AppColors.ink.withOpacity(0.55))),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    _label('Total court cost (Rs)'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _totalCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. 4800',
+                        hintStyle: AppFonts.body(13, color: AppColors.ink.withOpacity(0.30)),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.line),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.line),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.ball, width: 2),
+                        ),
+                      ),
+                    ),
+                    if (_pricePerHead > 0) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.ball.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Rs $_pricePerHead per head · ${_spots + 1} players',
+                          style: AppFonts.body(12, color: AppColors.ink, weight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: GestureDetector(
+                        onTap: _saving ? null : _save,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: _saving ? AppColors.ink.withOpacity(0.50) : AppColors.ink,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              _saving ? 'Saving…' : 'Save changes',
+                              style: AppFonts.body(15, color: Colors.white, weight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Text(
+        text,
+        style: AppFonts.mono(10, color: AppColors.ink.withOpacity(0.55), letterSpacing: 0.4),
+      );
+}
+
+class _Pills<T> extends StatelessWidget {
+  const _Pills({
+    required this.values,
+    required this.labels,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final List<T> values;
+  final List<String> labels;
+  final T selected;
+  final ValueChanged<T> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8, runSpacing: 8,
+      children: List.generate(values.length, (i) {
+        final active = values[i] == selected;
+        return GestureDetector(
+          onTap: () => onTap(values[i]),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: active ? AppColors.ball : Colors.white,
+              borderRadius: BorderRadius.circular(kBorderRadiusPill),
+              border: Border.all(color: active ? AppColors.ball : AppColors.line),
+            ),
+            child: Text(
+              labels[i],
+              style: AppFonts.body(
+                12,
+                color: AppColors.ink,
+                weight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _StepBtn extends StatelessWidget {
+  const _StepBtn({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Icon(icon, color: AppColors.ink, size: 20),
       ),
     );
   }

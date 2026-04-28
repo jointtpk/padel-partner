@@ -49,14 +49,9 @@ const _kDefaultUser = Player(
 Player kMe = _kDefaultUser;
 
 // ─── Games ───────────────────────────────────────────────────────────────────
-// Real games will appear once users host them — no seed games.
-const kGames = <Game>[
-  Game(id: 'g1', club: 'Padel Up Karachi',   area: 'DHA Phase 8',    when: 'Today', time: '6:30 PM',  duration: '90 min',  level: 'Pro',     levelKey: 'pro',     price: 1200, spots: 1, total: 4, hostId: 'me', playerIds: ['me'], vibe: 'Competitive',        court: 'Court 2 · Indoor',   weather: 'Indoor',      hot: true),
-  Game(id: 'g2', club: 'The Padel Club',      area: 'Clifton',        when: 'Today', time: '9:00 PM',  duration: '60 min',  level: 'Regular', levelKey: 'regular', price: 900,  spots: 2, total: 4, hostId: 'me', playerIds: ['me'],  vibe: 'Social',             court: 'Court 1 · Outdoor',  weather: '28°C · Clear',hot: false),
-  Game(id: 'g3', club: 'Bahria Padel Arena',  area: 'Bahria Town',    when: 'Tomorrow', time: '7:00 AM',  duration: '90 min',  level: 'Regular', levelKey: 'regular', price: 800,  spots: 1, total: 4, hostId: 'me', playerIds: ['me'],  vibe: 'Practice',           court: 'Court 4 · Outdoor',  weather: '24°C · Cloudy', hot: false),
-  Game(id: 'g4', club: 'Smash Padel',         area: 'DHA Phase 6',    when: 'Saturday', time: '5:00 PM',  duration: '90 min',  level: 'Elite',   levelKey: 'elite',   price: 1400, spots: 3, total: 4, hostId: 'me', playerIds: ['me'],             vibe: 'Competitive',        court: 'Court 1 · Indoor',   weather: 'Indoor',      hot: true),
-  Game(id: 'g5', club: 'Padel Up Karachi',    area: 'DHA Phase 8',    when: 'Sunday', time: '11:00 AM', duration: '60 min',  level: 'Rookie', levelKey: 'rookie',  price: 700,  spots: 2, total: 4, hostId: 'me', playerIds: ['me'],        vibe: 'Beginner-friendly',  court: 'Court 3 · Indoor',   weather: 'Indoor',      hot: false),
-];
+// Real games are hosted via the host flow and synced through Firestore.
+// kGames stays empty — no seeded entries.
+const kGames = <Game>[];
 
 // ─── Initial store state ──────────────────────────────────────────────────────
 const kInitialBookings    = <Booking>[];

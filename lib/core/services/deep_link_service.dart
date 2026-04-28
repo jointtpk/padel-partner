@@ -32,6 +32,13 @@ class DeepLinkService {
   static const _scheme = 'padelpartner';
   static const _joinHost = 'join';
 
+  /// Firebase Hosting domain for shareable HTTPS join links. The browser
+  /// page at `/g/<id>` (`public/g.html`) bounces into the custom scheme so
+  /// the existing handler picks the link up. Once iOS Universal Links /
+  /// Android App Links are configured for this domain, the OS will route
+  /// taps directly into the app and `_handle` will see the HTTPS URI.
+  static const _hostingDomain = 'padelpartner-74b7d.web.app';
+
   /// Begin listening for cold-start + runtime links. Safe to call once on app
   /// launch.
   Future<void> init() async {
@@ -53,14 +60,24 @@ class DeepLinkService {
   }
 
   void _handle(Uri uri) {
-    if (uri.scheme != _scheme) return;
-    if (uri.host != _joinHost) return;
-    final id = uri.queryParameters['id'];
-    final encoded = uri.queryParameters['d'];
-    if (id != null && id.isNotEmpty) {
-      _handleByIdLookup(id);
-    } else if (encoded != null && encoded.isNotEmpty) {
-      _handleEmbedded(encoded);
+    // Custom scheme: padelpartner://join?id=… or ?d=…
+    if (uri.scheme == _scheme && uri.host == _joinHost) {
+      final id = uri.queryParameters['id'];
+      final encoded = uri.queryParameters['d'];
+      if (id != null && id.isNotEmpty) {
+        _handleByIdLookup(id);
+      } else if (encoded != null && encoded.isNotEmpty) {
+        _handleEmbedded(encoded);
+      }
+      return;
+    }
+    // HTTPS App / Universal Link: https://<hosting>/g/<gameId>
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host == _hostingDomain &&
+        uri.pathSegments.length >= 2 &&
+        uri.pathSegments.first == 'g') {
+      final id = uri.pathSegments[1];
+      if (id.isNotEmpty) _handleByIdLookup(id);
     }
   }
 
@@ -95,13 +112,15 @@ class DeepLinkService {
     return s + '=' * (4 - mod);
   }
 
-  /// Builds the shareable join URL for [game]. Tries Firestore publish first
-  /// for a short URL; falls back to embedding the full game payload so the
-  /// link still works without a backend.
+  /// Builds the shareable join URL for [game]. Order of preference:
+  ///   1. HTTPS link (`https://<hosting>/g/<id>`) — clickable in any chat
+  ///      app. Used when the game was successfully published to Firestore.
+  ///   2. Custom-scheme link with embedded payload (`padelpartner://…?d=…`)
+  ///      as a fallback when Firestore is unavailable.
   static Future<String> buildShareUrl(Game game) async {
     final published = await GameSyncService.instance.publishGame(game);
     if (published) {
-      return '$_scheme://$_joinHost?id=${Uri.encodeComponent(game.id)}';
+      return 'https://$_hostingDomain/g/${Uri.encodeComponent(game.id)}';
     }
     return _buildEmbeddedUrl(game);
   }

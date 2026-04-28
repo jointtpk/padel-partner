@@ -70,6 +70,35 @@ class GameSyncService {
     }
   }
 
+  /// Stream of all currently-published games. Used by the browse screen so
+  /// users can discover games hosted on other devices. Returns an empty
+  /// stream if Firestore is unavailable.
+  Stream<List<Game>> streamAllGames() {
+    if (!_enabled) return const Stream.empty();
+    try {
+      return _firestore!
+          .collection('games')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snap) {
+        final games = <Game>[];
+        for (final d in snap.docs) {
+          try {
+            games.add(Game.fromMap(_sanitize(d.data())));
+          } catch (_) {
+            // Skip malformed docs rather than failing the whole stream.
+          }
+        }
+        return games;
+      }).handleError((e) {
+        debugPrint('GameSyncService.streamAllGames error: $e');
+      });
+    } catch (e) {
+      debugPrint('GameSyncService.streamAllGames setup error: $e');
+      return const Stream.empty();
+    }
+  }
+
   /// Fetch a previously-published game by id. Used by the deep-link receiver
   /// when the URL carries only `?id=…` instead of an embedded payload.
   Future<Game?> fetchGame(String gameId) async {

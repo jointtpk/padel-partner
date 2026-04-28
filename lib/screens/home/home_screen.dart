@@ -13,6 +13,7 @@ import '../../core/widgets/ball_widget.dart';
 import '../../core/widgets/chip_widget.dart';
 import '../../core/services/deep_link_service.dart';
 import '../../core/widgets/floating_nav.dart';
+import '../../core/widgets/verified_tick.dart';
 import '../../core/widgets/game_card.dart';
 import '../../core/widgets/pp_logo.dart';
 
@@ -181,10 +182,23 @@ class _HeroHeader extends StatelessWidget {
                 style: AppFonts.display(42, color: Colors.white, height: 0.95, letterSpacing: -0.84),
               ),
               Obx(() {
-                final firstName = store.currentUser.value.name.trim().split(' ').first;
-                return Text(
-                  '$firstName.',
-                  style: AppFonts.display(42, color: AppColors.ball, height: 0.95, letterSpacing: -0.84),
+                final user = store.currentUser.value;
+                final firstName = user.name.trim().split(' ').first;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$firstName.',
+                      style: AppFonts.display(42, color: AppColors.ball, height: 0.95, letterSpacing: -0.84),
+                    ),
+                    if (user.isPro) ...[
+                      const SizedBox(width: 10),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: VerifiedTick(size: 24),
+                      ),
+                    ],
+                  ],
                 );
               }),
               const SizedBox(height: 14),
