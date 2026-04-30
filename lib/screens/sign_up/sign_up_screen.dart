@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -520,28 +522,34 @@ class _StepProfile extends StatelessWidget {
         // Photo + caption
         Row(
           children: [
-            Obx(() => GestureDetector(
-              onTap: _pickPhoto,
-              child: Container(
-                width: 84, height: 84,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(24),
-                  border: ctrl.photoPath.value == null
-                      ? Border.all(color: Colors.white.withOpacity(0.25), style: BorderStyle.solid)
-                      : null,
-                  image: ctrl.photoPath.value != null
-                      ? DecorationImage(
-                          image: NetworkImage(ctrl.photoPath.value!),
-                          fit: BoxFit.cover,
-                        )
+            Obx(() {
+              final path = ctrl.photoPath.value;
+              return GestureDetector(
+                onTap: _pickPhoto,
+                child: Container(
+                  width: 84, height: 84,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(24),
+                    border: path == null
+                        ? Border.all(color: Colors.white.withOpacity(0.25), style: BorderStyle.solid)
+                        : null,
+                    image: path != null
+                        ? DecorationImage(
+                            // image_picker returns a local file path, so
+                            // FileImage is the right provider — NetworkImage
+                            // would fail with "scheme not supported".
+                            image: FileImage(File(path)),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: path == null
+                      ? const Center(child: Text('📷', style: TextStyle(fontSize: 30)))
                       : null,
                 ),
-                child: ctrl.photoPath.value == null
-                    ? const Center(child: Text('📷', style: TextStyle(fontSize: 30)))
-                    : null,
-              ),
-            )),
+              );
+            }),
             const SizedBox(width: 16),
             Expanded(
               child: Column(

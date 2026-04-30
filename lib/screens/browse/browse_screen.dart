@@ -520,40 +520,48 @@ class _GameList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              children: [
-                Text(
-                  '${games.length} game${games.length == 1 ? '' : 's'} found',
-                  style: AppFonts.mono(11, color: AppColors.ink.withOpacity(0.45), letterSpacing: 0.3),
-                ),
-                const Spacer(),
-                _SortPill(),
-              ],
-            ),
-          ),
+    return RefreshIndicator(
+      onRefresh: AppController.to.refreshAll,
+      color: AppColors.ink,
+      backgroundColor: AppColors.ball,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: GameCard(
-                  game: games[i],
-                  cardStyle: games[i].levelKey == 'elite' ? 'glass' : 'sticker',
-                  onTap: () => Get.toNamed(Routes.detail, arguments: games[i]),
-                ),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Text(
+                    '${games.length} game${games.length == 1 ? '' : 's'} found',
+                    style: AppFonts.mono(11, color: AppColors.ink.withOpacity(0.45), letterSpacing: 0.3),
+                  ),
+                  const Spacer(),
+                  _SortPill(),
+                ],
               ),
-              childCount: games.length,
             ),
           ),
-        ),
-      ],
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: GameCard(
+                    game: games[i],
+                    cardStyle: games[i].levelKey == 'elite' ? 'glass' : 'sticker',
+                    onTap: () => Get.toNamed(Routes.detail, arguments: games[i]),
+                  ),
+                ),
+                childCount: games.length,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

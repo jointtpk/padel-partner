@@ -29,16 +29,26 @@ class HomeScreen extends StatelessWidget {
       body: Stack(
         children: [
           // ── Main scrollable content ───────────────────────────────────────
-          CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _HeroHeader(store: store)),
-              SliverToBoxAdapter(child: _UpcomingSection(store: store)),
-              SliverToBoxAdapter(child: _TrialBannerSection(store: store)),
-              SliverToBoxAdapter(child: _QuickActions()),
-              SliverToBoxAdapter(child: _FeedSection(store: store)),
-              // Bottom padding so last card clears the nav
-              const SliverToBoxAdapter(child: SizedBox(height: 110)),
-            ],
+          RefreshIndicator(
+            onRefresh: store.refreshAll,
+            color: AppColors.ink,
+            backgroundColor: AppColors.ball,
+            child: CustomScrollView(
+              // `always` so the gesture works even when the content is
+              // shorter than the viewport (e.g. before any games load).
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                SliverToBoxAdapter(child: _HeroHeader(store: store)),
+                SliverToBoxAdapter(child: _UpcomingSection(store: store)),
+                SliverToBoxAdapter(child: _TrialBannerSection(store: store)),
+                SliverToBoxAdapter(child: _QuickActions()),
+                SliverToBoxAdapter(child: _FeedSection(store: store)),
+                // Bottom padding so last card clears the nav
+                const SliverToBoxAdapter(child: SizedBox(height: 110)),
+              ],
+            ),
           ),
           // ── Floating nav ──────────────────────────────────────────────────
           Positioned(

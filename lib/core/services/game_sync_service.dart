@@ -123,6 +123,48 @@ class GameSyncService {
     }
   }
 
+  /// One-shot fetch of every published game. Used by the pull-to-refresh
+  /// handler — gives the user a way to force a sync when the live
+  /// stream has stalled (e.g. after coming back from background, or
+  /// when auth has just been (re)established). Empty list on failure.
+  Future<List<Game>> fetchAllGames() async {
+    if (!_enabled) return const [];
+    try {
+      final snap = await _firestore!
+          .collection('games')
+          .orderBy('createdAt', descending: true)
+          .get();
+      final out = <Game>[];
+      for (final d in snap.docs) {
+        try {
+          out.add(Game.fromMap(_sanitize(d.data())));
+        } catch (_) {/* skip malformed */}
+      }
+      return out;
+    } catch (e) {
+      debugPrint('GameSyncService.fetchAllGames error: $e');
+      return const [];
+    }
+  }
+
+  /// One-shot fetch of [myUid]'s friend entries. Same purpose as
+  /// [fetchAllGames] — recovers from a stalled or just-attached stream.
+  Future<List<RemoteFriendEntry>> fetchMyFriends(String myUid) async {
+    if (!_enabled) return const [];
+    try {
+      final snap = await _firestore!
+          .collection('users').doc(myUid)
+          .collection('friends')
+          .get();
+      return snap.docs
+          .map((d) => RemoteFriendEntry.fromMap(d.id, d.data()))
+          .toList();
+    } catch (e) {
+      debugPrint('GameSyncService.fetchMyFriends error: $e');
+      return const [];
+    }
+  }
+
   /// Fetch a previously-published game by id. Used by the deep-link receiver
   /// when the URL carries only `?id=…` instead of an embedded payload.
   Future<Game?> fetchGame(String gameId) async {

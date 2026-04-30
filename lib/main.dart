@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -61,13 +59,16 @@ void main() async {
   await IdentityService.instance.uid();
 
   // ── Firebase Auth (anonymous) for verifiable sync identity ────────────────
-  // Returning users with a saved profile may not have a Firebase user yet
-  // (this code shipped after their sign-up). Sign them in anonymously now
-  // so subsequent Firestore writes carry a real auth.uid that security
-  // rules can verify.
-  if (saved != null) {
-    unawaited(AuthService.instance.ensureSignedIn());
-  }
+  // Sign in BEFORE wiring AppController so its Firestore listeners
+  // (games feed, friend list) carry an auth.uid from the very first
+  // request. With our security rules requiring `request.auth != null`,
+  // a fire-and-forget sign-in races the listeners and silently drops
+  // their initial reads. Best-effort — failure here means the app
+  // degrades to in-memory only, which is acceptable.
+  await AuthService.instance.ensureSignedIn().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => null,
+      );
 
   // ── GetX global controllers ───────────────────────────────────────────────
   Get.put(AppController(), permanent: true);

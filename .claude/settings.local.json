@@ -7,7 +7,9 @@
       "Read(//c/Users/taqir/.claude/projects/D--Bronze-Digitals-Clients-Padel-Partner---Mujtaba-padel-partner/memory//**)",
       "Read(//c/Users/taqir/.claude/projects/D--Bronze-Digitals-Clients-Padel-Partner---Mujtaba-padel-partner//**)",
       "Bash(flutter analyze *)",
-      "Bash(flutter build *)"
+      "Bash(flutter build *)",
+      "Bash(firebase deploy *)",
+      "Bash(npx --yes firebase-tools deploy --only firestore:rules --project padelpartner-74b7d)"
     ]
   }
 }

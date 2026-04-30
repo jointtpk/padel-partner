@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -142,11 +144,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               child: _photoPath != null && _photoPath!.isNotEmpty
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(28),
-                                      child: Image.network(
-                                        _photoPath!,
-                                        fit: BoxFit.cover,
-                                        width: 96, height: 96,
-                                        errorBuilder: (_, __, ___) => _avatarFallback(),
+                                      child: _PhotoPreview(
+                                        path: _photoPath!,
+                                        fallback: _avatarFallback(),
                                       ),
                                     )
                                   : _avatarFallback(),
@@ -262,6 +262,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Center(
       child: AvatarWidget(player: _store.currentUser.value, size: 80, ring: false),
     );
+  }
+}
+
+/// Renders a profile-photo preview from either a local file path or a
+/// remote URL. `image_picker` always returns a local path, so the old
+/// `Image.network(path)` was crashing for every newly-selected photo.
+class _PhotoPreview extends StatelessWidget {
+  const _PhotoPreview({required this.path, required this.fallback});
+  final String path;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRemote = path.startsWith('http://') || path.startsWith('https://');
+    final image = isRemote
+        ? Image.network(
+            path,
+            fit: BoxFit.cover,
+            width: 96, height: 96,
+            errorBuilder: (_, __, ___) => fallback,
+          )
+        : Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            width: 96, height: 96,
+            errorBuilder: (_, __, ___) => fallback,
+          );
+    return image;
   }
 }
 

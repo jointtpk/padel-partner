@@ -446,6 +446,40 @@ class AppController extends GetxController {
   /// Active subscription to my friend list in Firestore.
   StreamSubscription<List<RemoteFriendEntry>>? _friendsSub;
 
+  /// Manual one-shot refresh of every cross-device data source —
+  /// invoked by the pull-to-refresh gesture on Home / Browse so the
+  /// user has a recovery action when a stream has stalled or hasn't
+  /// caught up yet. Returns once all fetches have settled so the
+  /// `RefreshIndicator` can dismiss its spinner.
+  Future<void> refreshAll() async {
+    await Future.wait<void>([
+      GameSyncService.instance.fetchAllGames().then((games) {
+        if (games.isNotEmpty) {
+          // Mirror the registration the streamAllGames listener does so
+          // joiner snapshots / host snapshots are available immediately.
+          for (final g in games) {
+            for (final entry in g.playerSnapshots.entries) {
+              registerRemotePlayer(entry.value.copyWith(id: entry.key));
+            }
+            if (g.hostSnapshot != null && g.hostUid != null) {
+              registerRemotePlayer(g.hostSnapshot!.copyWith(id: g.hostUid!));
+            }
+          }
+          remoteGames.assignAll(games);
+        }
+      }),
+      // Friend list one-shot — the override UID may have just been
+      // set, in which case the persistent stream isn't subscribed yet.
+      Future(() async {
+        final myUid = IdentityService.instance.cached;
+        if (myUid == null) return;
+        final entries =
+            await GameSyncService.instance.fetchMyFriends(myUid);
+        if (entries.isNotEmpty) _mergeRemoteFriends(entries);
+      }),
+    ]);
+  }
+
   /// Re-subscribes to per-account streams after a fresh sign-in. The
   /// sign-out path tears them down so the new account starts clean —
   /// without this hook the friend list (and chat) would silently stay
