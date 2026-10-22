@@ -1,1 +1,5 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+// Written by the release workflow (manual App Store signing). Absent locally,
+// so Xcode keeps using automatic signing.
+#include? "Signing.xcconfig"

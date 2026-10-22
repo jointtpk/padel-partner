@@ -36,3 +36,12 @@ Thumbs.db
 
 # Firebase backups
 firebase_options.dart.bak
+
+# Signing material — never commit (stored as GitHub secrets instead)
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+ios/Flutter/Signing.xcconfig
+ExportOptions.plist

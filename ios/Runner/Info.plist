@@ -45,6 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Padel Partner uses your location to show games and courts near you.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Padel Partner needs access to your photos so you can choose a profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Padel Partner needs camera access so you can take a profile picture.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
