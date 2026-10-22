@@ -59,7 +59,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.padelpartner.app</string>
+			<string>pk.jointt.padelpartner</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>padelpartner</string>

@@ -18,7 +18,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.padelpartner.app"
+    namespace = "pk.jointt.padelpartner"
     compileSdk = 36
     ndkVersion = "27.0.12077973" // matches what Firebase + Maps + 11 other plugins want
 
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.padelpartner.app"
+        applicationId = "pk.jointt.padelpartner"
         minSdk = maxOf(flutter.minSdkVersion, 23) // Firebase Auth requires 23+
         targetSdk = 36 // Google Play requires a recent target API level
         versionCode = flutter.versionCode

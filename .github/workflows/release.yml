@@ -29,7 +29,7 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   FLUTTER_VERSION: '3.35.x'
-  PACKAGE_NAME: com.padelpartner.app
+  PACKAGE_NAME: pk.jointt.padelpartner
 
 jobs:
   prepare:

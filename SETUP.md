@@ -19,8 +19,8 @@ flutter run
 ## Firebase setup (required for real OTP auth + Firestore)
 
 1. Go to https://console.firebase.google.com → Add project → link your Google Cloud project
-2. **Android**: Add app → package `com.padelpartner.app` → download `google-services.json` → place in `android/app/`
-3. **iOS**: Add app → bundle ID `com.padelpartner.app` → download `GoogleService-Info.plist` → place in `ios/Runner/`
+2. **Android**: Add app → package `pk.jointt.padelpartner` → download `google-services.json` → place in `android/app/`
+3. **iOS**: Add app → bundle ID `pk.jointt.padelpartner` → download `GoogleService-Info.plist` → place in `ios/Runner/`
 4. Enable **Authentication → Phone** in Firebase console
 5. Enable **Firestore Database** (start in test mode)
 6. Enable **Storage**

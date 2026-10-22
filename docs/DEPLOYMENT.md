@@ -56,6 +56,26 @@ GitHub repo → **Settings → Secrets and variables → Actions → New reposit
 | `ANDROID_KEY_ALIAS` | `upload` |
 | `ANDROID_KEY_PASSWORD` | key password |
 
+### Step 3b. Register `pk.jointt.padelpartner` in Firebase  *(Android builds fail until this is done)*
+`android/app/google-services.json` and `lib/firebase_options.dart` must be generated for the app ID.
+On your machine, in the project folder:
+```bash
+git pull
+dart pub global activate flutterfire_cli
+flutterfire configure --project=padelpartner-74b7d --platforms=android,ios,web \
+  --android-package-name=pk.jointt.padelpartner --ios-bundle-id=pk.jointt.padelpartner
+```
+Answer **yes** if it asks to overwrite `google-services.json` / `firebase_options.dart`, then commit
+and push both files.
+
+For **phone auth on Android**, Firebase → Project settings → the `pk.jointt.padelpartner` Android app →
+**Add fingerprint**, and add the SHA-1 and SHA-256 of:
+- your upload key: `keytool -list -v -keystore upload-keystore.jks -alias upload`
+- the Play app signing key (Play Console → Test and release → App integrity, available after Step 5).
+
+The Android Google Maps key in `AndroidManifest.xml`: if it's restricted to the old package name, add
+`pk.jointt.padelpartner` + the same SHA-1s to its restrictions in Google Cloud → Credentials.
+
 ### Step 4. Create the app in Play Console
 1. Play Console → **Create app** → name *Padel Partner*, App, Free/Paid, accept declarations.
 2. Go through **Dashboard → Set up your app**: privacy policy URL, app access (give reviewers a
@@ -101,16 +121,8 @@ GitHub → Settings → Secrets and variables → Actions → **Variables** tab:
 
 ## Part 2 — iOS / App Store
 
-### Step 8. Add the iOS app to Firebase  *(the iOS app can't use Firebase without this)*
-`lib/firebase_options.dart` currently only has Android + Web. On your machine:
-```bash
-dart pub global activate flutterfire_cli
-flutterfire configure --project=padelpartner-74b7d --platforms=android,ios,web \
-  --ios-bundle-id=com.padelpartner.app
-```
-Commit the updated `lib/firebase_options.dart`.
-
-For **phone auth on iOS** also:
+### Step 8. Firebase phone auth for iOS
+The iOS Firebase app was registered in Step 3b. For **phone auth on iOS** also:
 - Firebase → Project settings → Cloud Messaging → upload an **APNs auth key** (Apple Developer →
   Keys → + → *Apple Push Notifications service*).
 - Add the *Encoded App ID* from Firebase (iOS app settings, looks like `app-1-97454348674-ios-...`)
@@ -118,11 +130,11 @@ For **phone auth on iOS** also:
 
 ### Step 9. Google Maps key for iOS
 `ios/Runner/AppDelegate.swift` still has `GMSServices.provideAPIKey("YOUR_API_KEY")`. Create a key
-restricted to *Maps SDK for iOS* + bundle ID `com.padelpartner.app` in Google Cloud and paste it in.
+restricted to *Maps SDK for iOS* + bundle ID `pk.jointt.padelpartner` in Google Cloud and paste it in.
 
 ### Step 10. Register the App ID
 https://developer.apple.com/account → **Certificates, IDs & Profiles → Identifiers → +** →
-App IDs → App → Description *Padel Partner*, **Bundle ID (Explicit)** `com.padelpartner.app`.
+App IDs → App → Description *Padel Partner*, **Bundle ID (Explicit)** `pk.jointt.padelpartner`.
 Enable capabilities: **Push Notifications** (phone auth), **In-App Purchase** (on by default),
 **Associated Domains** if you later add universal links. Save.
 
@@ -131,7 +143,7 @@ secret, the workflow reads it from the provisioning profile.
 
 ### Step 11. Create the app in App Store Connect
 https://appstoreconnect.apple.com → **Apps → + → New App** → iOS, name *Padel Partner*,
-language, Bundle ID `com.padelpartner.app`, SKU (e.g. `padelpartner`), Full Access.
+language, Bundle ID `pk.jointt.padelpartner`, SKU (e.g. `padelpartner`), Full Access.
 
 ### Step 12. Create the Apple Distribution certificate (.p12)
 No Mac needed — do it with `openssl` in Git Bash:
@@ -156,7 +168,7 @@ Keychain Access → right-click the cert → Export → `.p12`.
 
 ### Step 13. Create the App Store provisioning profile
 Developer portal → **Profiles → + → Distribution → App Store Connect** → App ID
-`com.padelpartner.app` → select the certificate from Step 12 → name it e.g.
+`pk.jointt.padelpartner` → select the certificate from Step 12 → name it e.g.
 *Padel Partner App Store* → download the `.mobileprovision`.
 
 > When the certificate expires (1 year) or you add capabilities, regenerate the profile and
